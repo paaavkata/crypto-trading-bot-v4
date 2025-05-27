@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/crypto-trading-bot-v4/pair-selector/pkg/models"
-	"github.com/crypto-trading-bot-v4/shared/pkg/database"
+	"github.com/paaavkata/crypto-trading-bot-v4/pair-selector/pkg/models"
+	"github.com/paaavkata/crypto-trading-bot-v4/shared/pkg/database"
 )
 
 type Config struct {
