@@ -1,10 +1,17 @@
 registry: 929572853995.dkr.ecr.eu-west-1.amazonaws.com
 app: crypto-trading-bot-v4
-markets:
-  kucoin:
-    apiKey: ""
-    apiSecret: ""
-    apiPassphrase: ""
+
+# Kucoin API credentials are now managed via a Kubernetes secret.
+# Define the name of the secret in this values file.
+# See helm/README.md for instructions on creating this secret.
+kucoinApiSecretName: "kucoin-api-credentials"
+
+# markets:
+#   kucoin:
+#     apiKey: "" # DEPRECATED: Managed by kucoinApiSecretName
+#     apiSecret: "" # DEPRECATED: Managed by kucoinApiSecretName
+#     apiPassphrase: "" # DEPRECATED: Managed by kucoinApiSecretName
+
 envVars:
   - name: LOG_LEVEL
     value: info
@@ -14,11 +21,18 @@ secretEnvVars:
     secretKey: uri
 pairSelector:
   image:
-    name: pair-selector
-    tag: latest
-    pullPolicy: Always
-  deployment:
+    name: pair-selector # Renamed from repository to match existing structure
+    tag: 0.1.0
+    pullPolicy: IfNotPresent
+  deployment: # Kept deployment.replicas as it was, assuming it's service specific
     replicas: 1
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
   envVars:
     - name: EVALUATION_INTERVAL_HOURS
       value: "3"
@@ -28,11 +42,18 @@ pairSelector:
       value: "10"
 priceCollector:
   image:
-    name: price-collector
-    tag: latest
-    pullPolicy: Always
-  deployment:
+    name: price-collector # Renamed from repository to match existing structure
+    tag: 0.1.0
+    pullPolicy: IfNotPresent
+  deployment: # Kept deployment.replicas as it was
     replicas: 1
+  resources:
+    requests:
+      cpu: "150m" # Example: different values for price collector
+      memory: "192Mi"
+    limits:
+      cpu: "300m"
+      memory: "384Mi"
   envVars:
     - name: COLLECTION_INTERVAL_SECONDS
       value: "60"
@@ -40,11 +61,18 @@ priceCollector:
       value: "1000"
 tradingEngine:
   image:
-    name: trading-engine
-    tag: latest
-    pullPolicy: Always
-  deployment:
+    name: trading-engine # Renamed from repository to match existing structure
+    tag: 0.1.0
+    pullPolicy: IfNotPresent
+  deployment: # Kept deployment.replicas as it was
     replicas: 1
+  resources:
+    requests:
+      cpu: "120m" # Example: different values for trading engine
+      memory: "160Mi"
+    limits:
+      cpu: "250m"
+      memory: "320Mi"
   envVars:
     - name: TRADING_INTERVAL_SECONDS
       value: "60"

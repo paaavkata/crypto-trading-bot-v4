@@ -55,3 +55,38 @@ type OrderRequest struct {
 type OrderResponse struct {
 	OrderId string `json:"orderId"`
 }
+
+// KucoinOrderDetail represents the detailed information of an order from Kucoin.
+// Fields are based on common structures; refer to actual Kucoin API docs for exact fields.
+type KucoinOrderDetail struct {
+	ID            string `json:"id"` // Order ID
+	ClientOid     string `json:"clientOid"`
+	Symbol        string `json:"symbol"`
+	Side          string `json:"side"`  // "buy" or "sell"
+	Type          string `json:"type"`  // "limit", "market", "stop_limit", etc.
+	Price         string `json:"price"` // Original order price
+	Size          string `json:"size"`  // Original order size (quantity)
+	DealFunds     string `json:"dealFunds"` // Amount executed in quote currency
+	DealSize      string `json:"dealSize"`  // Amount executed in base currency (filled quantity)
+	Fee           string `json:"fee"`
+	FeeCurrency   string `json:"feeCurrency"`
+	Stp           string `json:"stp"`
+	Stop          string `json:"stop"`
+	StopTriggered bool   `json:"stopTriggered"`
+	StopPrice     string `json:"stopPrice"`
+	TimeInForce   string `json:"timeInForce"`
+	PostOnly      bool   `json:"postOnly"`
+	Hidden        bool   `json:"hidden"`
+	Iceberg       bool   `json:"iceberg"`
+	VisibleSize   string `json:"visibleSize"`
+	CancelAfter   int64  `json:"cancelAfter"`
+	Channel       string `json:"channel"`
+	Tags          string `json:"tags"`
+	IsActive      bool   `json:"isActive"`     // true if the order is active, false if filled or cancelled
+	CancelExist   bool   `json:"cancelExist"`  // true if the order can be cancelled
+	CreatedAt     int64  `json:"createdAt"`    // Order creation time (milliseconds)
+	TradeType     string `json:"tradeType"`    // e.g., TRADE, MARGIN_TRADE
+	Status        string `json:"status"`       // This field is not directly in Kucoin's /api/v1/orders/{orderId} but isActive is. We might infer status.
+											  // Common statuses from other endpoints or general knowledge: "active", "done", "pending"
+											  // Kucoin's "done" status is typically inferred from isActive=false and no cancelExist.
+}

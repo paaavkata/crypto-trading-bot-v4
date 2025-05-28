@@ -2,15 +2,19 @@ package main
 
 import (
 	"context"
+	"context"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/paaavkata/crypto-trading-bot-v4/shared/pkg/database"
 	"github.com/paaavkata/crypto-trading-bot-v4/shared/pkg/utils"
 
 	"github.com/paaavkata/crypto-trading-bot-v4/pair-selector/internal/config"
 	pairDB "github.com/paaavkata/crypto-trading-bot-v4/pair-selector/internal/database"
+	"github.com/paaavkata/crypto-trading-bot-v4/pair-selector/internal/health" // Import health package
 	"github.com/paaavkata/crypto-trading-bot-v4/pair-selector/internal/scheduler"
 	"github.com/paaavkata/crypto-trading-bot-v4/pair-selector/internal/selector"
 
@@ -51,6 +55,10 @@ func main() {
 		logger.WithError(err).Fatal("Failed to start scheduler")
 	}
 
+	// Initialize and start health checker server
+	healthChecker := health.NewHealthChecker(logger) // Pass logger, and db if needed later
+	healthServer := healthChecker.StartServer("8082") // Port for pair-selector health checks
+
 	logger.Info("Pair selector service started successfully")
 
 	// Wait for interrupt signal to gracefully shutdown
@@ -62,6 +70,14 @@ func main() {
 
 	// Stop scheduler
 	pairScheduler.Stop()
+
+	// Shutdown health server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := healthServer.Shutdown(shutdownCtx); err != nil {
+		logger.WithError(err).Error("Failed to shutdown health server gracefully for pair-selector")
+	}
 
 	// Cancel context
 	cancel()

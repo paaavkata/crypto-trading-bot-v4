@@ -49,7 +49,8 @@ func main() {
 
 	// Initialize health checker
 	healthChecker := health.NewHealthChecker(db, logger)
-	healthServer := healthChecker.StartServer(cfg.MetricsPort)
+	// Use port 8081 as defined in the Helm template for price-collector health probes
+	healthServer := healthChecker.StartServer("8081")
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
