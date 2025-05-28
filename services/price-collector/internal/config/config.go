@@ -15,6 +15,7 @@ type Config struct {
 	CollectionInterval time.Duration
 	BatchSize          int
 	MetricsPort        string
+	DataRetentionDays  int
 }
 
 func Load() *Config {
@@ -31,6 +32,7 @@ func Load() *Config {
 		CollectionInterval: time.Duration(getEnvInt("COLLECTION_INTERVAL_SECONDS", 60)) * time.Second,
 		BatchSize:          getEnvInt("BATCH_SIZE", 1000),
 		MetricsPort:        getEnv("METRICS_PORT", "8080"),
+		DataRetentionDays:  getEnvInt("PRICE_COLLECTOR_DATA_RETENTION_DAYS", 30),
 	}
 }
 

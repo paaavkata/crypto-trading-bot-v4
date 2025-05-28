@@ -12,14 +12,16 @@ import (
 )
 
 type Processor struct {
-	repo   *database.Repository
-	logger *logrus.Logger
+	repo              *database.Repository
+	logger            *logrus.Logger
+	dataRetentionDays int
 }
 
-func NewProcessor(repo *database.Repository, logger *logrus.Logger) *Processor {
+func NewProcessor(repo *database.Repository, logger *logrus.Logger, dataRetentionDays int) *Processor {
 	return &Processor{
-		repo:   repo,
-		logger: logger,
+		repo:              repo,
+		logger:            logger,
+		dataRetentionDays: dataRetentionDays,
 	}
 }
 
@@ -88,12 +90,6 @@ func (p *Processor) ProcessTickers(ctx context.Context, tickers []models.TickerD
 		}
 	}
 
-	// Update trading pairs
-	if err := p.repo.UpdateTradingPairs(ctx, symbols); err != nil {
-		p.logger.WithError(err).Error("Failed to update trading pairs")
-		return err
-	}
-
 	duration := time.Since(start)
 	p.logger.WithFields(logrus.Fields{
 		"processed_count":  len(priceData),
@@ -118,7 +114,7 @@ func (p *Processor) normalizePriceData(ticker models.TickerData) models.TickerDa
 	}
 }
 
-// Normalize price fields to fit DECIMAL(30,12) - 30 total digits, 12 after decimal
+// Normalize price fields to fit DECIMAL(20,8) - 20 total digits, 8 after decimal
 func (p *Processor) normalizePriceField(value float64) float64 {
 	if math.IsNaN(value) || math.IsInf(value, 0) {
 		return 0.0
@@ -131,10 +127,10 @@ func (p *Processor) normalizePriceField(value float64) float64 {
 		value = -value
 	}
 
-	// DECIMAL(30,12) means max 18 digits before decimal, 12 after
-	// Max value: 999999999999999999.999999999999
-	const maxValue = 999999999999999999.0
-	const precision = 12
+	// DECIMAL(20,8) means max 12 digits before decimal, 8 after
+	// Max value: 999999999999.99999999
+	const maxValue = 999999999999.0
+	const precision = 8
 
 	if value > maxValue {
 		p.logger.WithFields(logrus.Fields{
@@ -144,20 +140,20 @@ func (p *Processor) normalizePriceField(value float64) float64 {
 		return maxValue * sign
 	}
 
-	// Round to 12 decimal places
+	// Round to 8 decimal places
 	multiplier := math.Pow(10, precision)
 	return math.Round(value*multiplier) / multiplier * sign
 }
 
-// Normalize volume fields to fit DECIMAL(30,8) - 30 total digits, 8 after decimal
+// Normalize volume fields to fit DECIMAL(20,8) - 20 total digits, 8 after decimal
 func (p *Processor) normalizeVolumeField(value float64) float64 {
 	if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
 		return 0.0
 	}
 
-	// DECIMAL(30,8) means max 22 digits before decimal, 8 after
-	// Max value: 9999999999999999999999.99999999
-	const maxValue = 9999999999999999999999.0
+	// DECIMAL(20,8) means max 12 digits before decimal, 8 after
+	// Max value: 999999999999.99999999
+	const maxValue = 999999999999.0
 	const precision = 8
 
 	if value > maxValue {
@@ -173,7 +169,7 @@ func (p *Processor) normalizeVolumeField(value float64) float64 {
 	return math.Round(value*multiplier) / multiplier
 }
 
-// Normalize change rate to fit DECIMAL(15,10) - 15 total digits, 10 after decimal
+// Normalize change rate to fit DECIMAL(10,6) - 10 total digits, 6 after decimal
 func (p *Processor) normalizeChangeRateField(value float64) float64 {
 	if math.IsNaN(value) || math.IsInf(value, 0) {
 		return 0.0
@@ -186,10 +182,10 @@ func (p *Processor) normalizeChangeRateField(value float64) float64 {
 		value = -value
 	}
 
-	// DECIMAL(15,10) means max 5 digits before decimal, 10 after
-	// Max value: 99999.9999999999 (reasonable for change rates)
-	const maxValue = 99999.0
-	const precision = 10
+	// DECIMAL(10,6) means max 4 digits before decimal, 6 after
+	// Max value: 9999.999999
+	const maxValue = 9999.0
+	const precision = 6
 
 	if value > maxValue {
 		p.logger.WithFields(logrus.Fields{
@@ -199,7 +195,7 @@ func (p *Processor) normalizeChangeRateField(value float64) float64 {
 		return maxValue * sign
 	}
 
-	// Round to 10 decimal places
+	// Round to 6 decimal places
 	multiplier := math.Pow(10, precision)
 	return math.Round(value*multiplier) / multiplier * sign
 }
@@ -243,24 +239,21 @@ func (p *Processor) wasNormalized(original, normalized models.TickerData) bool {
 
 // Helper functions for logging
 func (p *Processor) formatOriginalData(ticker models.TickerData) string {
-	return fmt.Sprintf("O:%.12f H:%.12f L:%.12f C:%.12f V:%.8f QV:%.8f CR:%.10f CP:%.12f",
+	return fmt.Sprintf("O:%.8f H:%.8f L:%.8f C:%.8f V:%.8f QV:%.8f CR:%.6f CP:%.8f",
 		ticker.Open, ticker.High, ticker.Low, ticker.Close,
 		ticker.Volume, ticker.QuoteVolume, ticker.ChangeRate, ticker.ChangePrice)
 }
 
 func (p *Processor) formatNormalizedData(ticker models.TickerData) string {
-	return fmt.Sprintf("O:%.12f H:%.12f L:%.12f C:%.12f V:%.8f QV:%.8f CR:%.10f CP:%.12f",
+	return fmt.Sprintf("O:%.8f H:%.8f L:%.8f C:%.8f V:%.8f QV:%.8f CR:%.6f CP:%.8f",
 		ticker.Open, ticker.High, ticker.Low, ticker.Close,
 		ticker.Volume, ticker.QuoteVolume, ticker.ChangeRate, ticker.ChangePrice)
 }
 
 func (p *Processor) CleanupOldData(ctx context.Context) error {
-	// Keep data for 30 days
-	const retentionDays = 30
+	p.logger.WithField("retention_days", p.dataRetentionDays).Info("Starting cleanup of old price data")
 
-	p.logger.Info("Starting cleanup of old price data")
-
-	if err := p.repo.CleanupOldData(ctx, retentionDays); err != nil {
+	if err := p.repo.CleanupOldData(ctx, p.dataRetentionDays); err != nil {
 		p.logger.WithError(err).Error("Failed to cleanup old data")
 		return err
 	}

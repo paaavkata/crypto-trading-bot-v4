@@ -44,7 +44,7 @@ func main() {
 	// Initialize repositories and services
 	repo := priceDB.NewRepository(db, logger)
 	fetcher := collector.NewFetcher(kucoinClient, logger)
-	processor := collector.NewProcessor(repo, logger)
+	processor := collector.NewProcessor(repo, logger, cfg.DataRetentionDays)
 	scheduler := collector.NewScheduler(fetcher, processor, cfg.CollectionInterval, logger)
 
 	// Initialize health checker

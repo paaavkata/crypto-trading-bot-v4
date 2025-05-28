@@ -7,7 +7,7 @@ markets:
     apiPassphrase: ""
 envVars:
   - name: LOG_LEVEL
-    value: debug
+    value: info
 secretEnvVars:
   - name: DB_URI
     secretName: crypto-trading-pguser-postgres
@@ -21,7 +21,7 @@ pairSelector:
     replicas: 1
   envVars:
     - name: EVALUATION_INTERVAL_HOURS
-      value: "4"
+      value: "3"
     - name: MIN_VOLUME_USDT
       value: "1000000"
     - name: MAX_ACTIVE_PAIRS
@@ -37,7 +37,7 @@ priceCollector:
     - name: COLLECTION_INTERVAL_SECONDS
       value: "60"
     - name: BATCH_SIZE
-      value: "500"
+      value: "1000"
 tradingEngine:
   image:
     name: trading-engine
