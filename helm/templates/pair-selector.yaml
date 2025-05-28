@@ -21,11 +21,20 @@ spec:
         imagePullPolicy: {{ .Values.pairSelector.image.pullPolicy }}
         env:
         - name: KUCOIN_API_KEY
-          value: {{ .Values.markets.kucoin.apiKey | quote }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.kucoinApiSecretName | default "kucoin-api-credentials" }}
+              key: api-key
         - name: KUCOIN_API_SECRET
-          value: {{ .Values.markets.kucoin.apiSecret | quote }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.kucoinApiSecretName | default "kucoin-api-credentials" }}
+              key: api-secret
         - name: KUCOIN_API_PASSPHRASE
-          value: {{ .Values.markets.kucoin.apiPassphrase | quote }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.kucoinApiSecretName | default "kucoin-api-credentials" }}
+              key: api-passphrase
         {{- range .Values.envVars }}
         - name: {{ .name }}
           value: {{ .value | quote }}
@@ -45,10 +54,29 @@ spec:
               key: {{ .secretKey }}
         {{- end }}
         {{- end }}
+        ports:
+        - containerPort: 8082 # Assuming health check on port 8082 for pair-selector
+          name: http-health
         resources:
-          limits:
-            cpu: 200m
-            memory: 128Mi
           requests:
-            cpu: 100m
-            memory: 64Mi
+            cpu: {{ .Values.pairSelector.resources.requests.cpu }}
+            memory: {{ .Values.pairSelector.resources.requests.memory }}
+          limits:
+            cpu: {{ .Values.pairSelector.resources.limits.cpu }}
+            memory: {{ .Values.pairSelector.resources.limits.memory }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http-health # Reference the port name
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http-health # Reference the port name
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3

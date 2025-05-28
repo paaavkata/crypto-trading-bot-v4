@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"context"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,6 +16,7 @@ import (
 	"github.com/paaavkata/crypto-trading-bot-v4/trading-engine/internal/config"
 	"github.com/paaavkata/crypto-trading-bot-v4/trading-engine/internal/database"
 	"github.com/paaavkata/crypto-trading-bot-v4/trading-engine/internal/exchange"
+	"github.com/paaavkata/crypto-trading-bot-v4/trading-engine/internal/health" // Import health package
 	"github.com/paaavkata/crypto-trading-bot-v4/trading-engine/internal/signals"
 	"github.com/paaavkata/crypto-trading-bot-v4/trading-engine/internal/trader"
 
@@ -55,8 +58,13 @@ func main() {
 		StopLossPercent:     cfg.StopLossPercent,
 		TakeProfitPercent:   cfg.TakeProfitPercent,
 	}
+	// The NewEngine now initializes its own signal generator
+	engine := trader.NewEngine(repo, kucoinExchange, engineConfig, logger)
 
-	engine := trader.NewEngine(repo, kucoinExchange, signalGenerator, engineConfig, logger)
+	// Initialize and start health checker server
+	healthChecker := health.NewHealthChecker(logger) // Pass logger, and db/exchange if needed later
+	healthServer := healthChecker.StartServer("8083") // Port for trading-engine health checks
+
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -81,8 +89,16 @@ func main() {
 	// Cancel context to stop trading engine
 	cancel()
 
-	// Give some time for graceful shutdown
-	time.Sleep(2 * time.Second)
+	// Shutdown health server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := healthServer.Shutdown(shutdownCtx); err != nil {
+		logger.WithError(err).Error("Failed to shutdown health server gracefully for trading-engine")
+	}
+
+	// Give some time for other graceful shutdowns if any are added before this
+	// time.Sleep(2 * time.Second) // This might already be covered by engine's graceful shutdown if it has one
 
 	logger.Info("Trading engine service stopped")
 }

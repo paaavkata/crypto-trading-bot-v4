@@ -264,3 +264,59 @@ func (r *Repository) GetLatestPrice(ctx context.Context, symbol string) (float64
 
 	return price, nil
 }
+
+// GetPriceDataForSymbol fetches historical price data (timestamp and close price) for a given symbol.
+func (r *Repository) GetPriceDataForSymbol(ctx context.Context, symbol string, limit int) ([]models.PriceData, error) {
+	// Query to fetch the close price and timestamp for a symbol, ordered by timestamp descending
+	// This assumes that the price_data table is populated by the price-collector service
+	// and contains 1-minute (or other regular interval) candles.
+	query := `
+        SELECT timestamp, close
+        FROM price_data
+        WHERE symbol = $1
+        ORDER BY timestamp DESC
+        LIMIT $2
+    `
+
+	rows, err := r.db.QueryContext(ctx, query, symbol, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query price data for symbol %s: %w", symbol, err)
+	}
+	defer rows.Close()
+
+	var priceData []models.PriceData
+	for rows.Next() {
+		var pd models.PriceData // We only fill Timestamp and Close, other fields will be zero value
+		err := rows.Scan(&pd.Timestamp, &pd.Close)
+		if err != nil {
+			r.logger.WithError(err).WithFields(logrus.Fields{
+				"symbol": symbol,
+				"limit":  limit,
+			}).Error("Failed to scan price data row")
+			// Continue to scan other rows, or return error immediately?
+			// For now, let's continue and return what we have, plus any error from rows.Err()
+			continue
+		}
+		priceData = append(priceData, pd)
+	}
+
+	if err = rows.Err(); err != nil {
+		return priceData, fmt.Errorf("error iterating price data rows for symbol %s: %w", symbol, err)
+	}
+	
+	// The prices are fetched in descending order (latest first).
+	// For SMA calculation, it's usually easier to have them in ascending order (oldest first).
+	// Reverse the slice.
+	for i, j := 0, len(priceData)-1; i < j; i, j = i+1, j-1 {
+		priceData[i], priceData[j] = priceData[j], priceData[i]
+	}
+
+
+	r.logger.WithFields(logrus.Fields{
+		"symbol":        symbol,
+		"limit_requested": limit,
+		"records_fetched": len(priceData),
+	}).Debug("Fetched price data for symbol")
+
+	return priceData, nil
+}

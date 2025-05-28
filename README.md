@@ -57,13 +57,19 @@ This project implements a comprehensive cryptocurrency trading bot using three m
 
 ## Database Schema
 
-### Core Tables
+The database schema is managed via `golang-migrate/migrate`. The initial schema is defined in `migrations/000001_initial_schema.up.sql`.
+All subsequent schema changes are applied through new migration files.
+
+For detailed instructions on managing database migrations, installing the `migrate` CLI, and using the provided `Makefile` targets, please refer to [docs/database-migrations.md](./docs/database-migrations.md).
+
+### Core Tables (as defined in initial schema)
 - `price_data`: Minute-by-minute OHLCV data
 - `trading_pairs`: Available pairs with metrics
 - `selected_pairs`: Currently selected pairs for trading
 - `trading_configs`: Strategy configurations per pair
 - `positions`: Open/closed trading positions
 - `orders`: Order history and status
+- `system_config`: System-wide configuration key-value store
 
 ## Environment Variables
 
@@ -89,9 +95,9 @@ Each service is designed as an independent microservice with:
 ## Getting Started
 
 1. Set up PostgreSQL database
-2. Run database migrations (`scripts/db/schema.sql`)
-3. Configure environment variables
-4. Deploy services to Kubernetes
-5. Monitor logs and health endpoints
+2. Apply database migrations using the `Makefile` (e.g., `make migrate-up`). See [docs/database-migrations.md](./docs/database-migrations.md) for details.
+3. Configure environment variables (especially `DB_URL` for migrations if not using the default).
+4. Deploy services to Kubernetes.
+5. Monitor logs and health endpoints.
 
 The system is designed to be highly resilient with proper error handling, retry logic, and monitoring capabilities suitable for production cryptocurrency trading operations.
