@@ -1,23 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}
+  name: price-collector
   namespace: {{ .Release.Namespace }}
   labels:
-    app: {{ .Release.Name }}
+    app: price-collector
 spec:
   replicas: {{ .Values.priceCollector.deployment.replicas }}
   selector:
     matchLabels:
-      app: {{ .Release.Name }}
+      app: price-collector
   template:
     metadata:
       labels:
-        app: {{ .Release.Name }}
+        app: price-collector
     spec:
-      serviceAccountName: {{ .Release.Name }}
       containers:
-      - name: {{ .Release.Name }}
+      - name: price-collector
         image: "{{ .Values.registry }}/{{ .Values.app }}/{{ .Values.priceCollector.image.name }}:{{ .Values.priceCollector.image.tag }}"
         imagePullPolicy: {{ .Values.priceCollector.image.pullPolicy }}
         env:

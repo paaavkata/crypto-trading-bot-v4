@@ -1,23 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}
+  name: pair-selector
   namespace: {{ .Release.Namespace }}
   labels:
-    app: {{ .Release.Name }}
+    app: pair-selector
 spec:
   replicas: {{ .Values.pairSelector.deployment.replicas }}
   selector:
     matchLabels:
-      app: {{ .Release.Name }}
+      app: pair-selector
   template:
     metadata:
       labels:
-        app: {{ .Release.Name }}
+        app: pair-selector
     spec:
-      serviceAccountName: {{ .Release.Name }}
       containers:
-      - name: {{ .Release.Name }}
+      - name: pair-selector
         image: "{{ .Values.registry }}/{{ .Values.app }}/{{ .Values.pairSelector.image.name }}:{{ .Values.pairSelector.image.tag }}"
         imagePullPolicy: {{ .Values.pairSelector.image.pullPolicy }}
         env:

@@ -32,7 +32,7 @@ func (s *Scheduler) Start(ctx context.Context) error {
 	s.logger.WithField("interval", s.interval).Info("Starting price collection scheduler")
 
 	// Schedule price collection
-	_, err := s.cron.AddFunc("@every 1m", func() {
+	_, err := s.cron.AddFunc("0 * * * * *", func() {
 		s.collectPrices(ctx)
 	})
 	if err != nil {
@@ -40,7 +40,7 @@ func (s *Scheduler) Start(ctx context.Context) error {
 	}
 
 	// Schedule cleanup daily at 2 AM
-	_, err = s.cron.AddFunc("0 2 * * *", func() {
+	_, err = s.cron.AddFunc("0 0 2 * * *", func() {
 		s.cleanupData(ctx)
 	})
 	if err != nil {

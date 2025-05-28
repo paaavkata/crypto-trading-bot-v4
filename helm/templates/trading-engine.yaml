@@ -1,23 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}
+  name: trading-engine
   namespace: {{ .Release.Namespace }}
   labels:
-    app: {{ .Release.Name }}
+    app: trading-engine
 spec:
   replicas: {{ .Values.tradingEngine.deployment.replicas }}
   selector:
     matchLabels:
-      app: {{ .Release.Name }}
+      app: trading-engine
   template:
     metadata:
       labels:
-        app: {{ .Release.Name }}
+        app: trading-engine
     spec:
-      serviceAccountName: {{ .Release.Name }}
       containers:
-      - name: {{ .Release.Name }}
+      - name: trading-engine
         image: "{{ .Values.registry }}/{{ .Values.app }}/{{ .Values.tradingEngine.image.name }}:{{ .Values.tradingEngine.image.tag }}"
         imagePullPolicy: {{ .Values.tradingEngine.image.pullPolicy }}
         env:

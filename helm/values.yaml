@@ -10,7 +10,7 @@ envVars:
     value: debug
 secretEnvVars:
   - name: DB_URI
-    secretName: crypto-trading-db-pguser-crypto-trading-user
+    secretName: crypto-trading-pguser-postgres
     secretKey: uri
 pairSelector:
   image:
@@ -40,7 +40,7 @@ priceCollector:
       value: "1000"
 tradingEngine:
   image:
-    image: trading-engine
+    name: trading-engine
     tag: latest
     pullPolicy: Always
   deployment:
