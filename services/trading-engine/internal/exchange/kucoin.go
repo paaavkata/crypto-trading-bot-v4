@@ -1,10 +1,9 @@
 package exchange
 
 import (
-	"strconv"
-
 	"github.com/google/uuid"
 	"github.com/paaavkata/crypto-trading-bot-v4/shared/pkg/kucoin"
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 )
 
@@ -20,7 +19,7 @@ func NewKuCoinExchange(client *kucoin.Client, logger *logrus.Logger) *KuCoinExch
 	}
 }
 
-func (k *KuCoinExchange) PlaceBuyOrder(symbol string, quantity, price float64) (*kucoin.OrderResponse, error) {
+func (k *KuCoinExchange) PlaceBuyOrder(symbol string, quantity, price decimal.Decimal) (*kucoin.OrderResponse, error) {
 	clientOid := uuid.New().String()
 
 	order := kucoin.OrderRequest{
@@ -28,8 +27,8 @@ func (k *KuCoinExchange) PlaceBuyOrder(symbol string, quantity, price float64) (
 		Side:        "buy",
 		Symbol:      symbol,
 		Type:        "limit",
-		Size:        strconv.FormatFloat(quantity, 'f', 8, 64),
-		Price:       strconv.FormatFloat(price, 'f', 8, 64),
+		Size:        quantity,
+		Price:       price,
 		TimeInForce: "GTC",
 	}
 
@@ -44,7 +43,7 @@ func (k *KuCoinExchange) PlaceBuyOrder(symbol string, quantity, price float64) (
 	return k.client.PlaceOrder(order)
 }
 
-func (k *KuCoinExchange) PlaceSellOrder(symbol string, quantity, price float64) (*kucoin.OrderResponse, error) {
+func (k *KuCoinExchange) PlaceSellOrder(symbol string, quantity, price decimal.Decimal) (*kucoin.OrderResponse, error) {
 	clientOid := uuid.New().String()
 
 	order := kucoin.OrderRequest{
@@ -52,8 +51,8 @@ func (k *KuCoinExchange) PlaceSellOrder(symbol string, quantity, price float64) 
 		Side:        "sell",
 		Symbol:      symbol,
 		Type:        "limit",
-		Size:        strconv.FormatFloat(quantity, 'f', 8, 64),
-		Price:       strconv.FormatFloat(price, 'f', 8, 64),
+		Size:        quantity,
+		Price:       price,
 		TimeInForce: "GTC",
 	}
 
@@ -68,7 +67,7 @@ func (k *KuCoinExchange) PlaceSellOrder(symbol string, quantity, price float64) 
 	return k.client.PlaceOrder(order)
 }
 
-func (k *KuCoinExchange) PlaceMarketOrder(symbol, side string, quantity float64) (*kucoin.OrderResponse, error) {
+func (k *KuCoinExchange) PlaceMarketOrder(symbol, side string, quantity decimal.Decimal) (*kucoin.OrderResponse, error) {
 	clientOid := uuid.New().String()
 
 	order := kucoin.OrderRequest{
@@ -76,7 +75,7 @@ func (k *KuCoinExchange) PlaceMarketOrder(symbol, side string, quantity float64)
 		Side:      side,
 		Symbol:    symbol,
 		Type:      "market",
-		Size:      strconv.FormatFloat(quantity, 'f', 8, 64),
+		Size:      quantity,
 	}
 
 	k.logger.WithFields(logrus.Fields{

@@ -1,5 +1,11 @@
 package kucoin
 
+import (
+	"github.com/shopspring/decimal"
+)
+
+// Use decimal.Decimal for all monetary fields
+
 type APIResponse struct {
 	Code string      `json:"code"`
 	Data interface{} `json:"data"`
@@ -7,18 +13,18 @@ type APIResponse struct {
 }
 
 type Ticker struct {
-	Symbol       string `json:"symbol"`
-	SymbolName   string `json:"symbolName"`
-	Buy          string `json:"buy"`
-	Sell         string `json:"sell"`
-	ChangeRate   string `json:"changeRate"`
-	ChangePrice  string `json:"changePrice"`
-	High         string `json:"high"`
-	Low          string `json:"low"`
-	Vol          string `json:"vol"`
-	VolValue     string `json:"volValue"`
-	Last         string `json:"last"`
-	AveragePrice string `json:"averagePrice"`
+	Symbol       string          `json:"symbol"`
+	SymbolName   string          `json:"symbolName"`
+	Buy          decimal.Decimal `json:"buy"`
+	Sell         decimal.Decimal `json:"sell"`
+	ChangeRate   decimal.Decimal `json:"changeRate"`
+	ChangePrice  decimal.Decimal `json:"changePrice"`
+	High         decimal.Decimal `json:"high"`
+	Low          decimal.Decimal `json:"low"`
+	Vol          decimal.Decimal `json:"vol"`
+	VolValue     decimal.Decimal `json:"volValue"`
+	Last         decimal.Decimal `json:"last"`
+	AveragePrice decimal.Decimal `json:"averagePrice"`
 }
 
 type AllTickersResponse struct {
@@ -42,14 +48,14 @@ type Symbol struct {
 }
 
 type OrderRequest struct {
-	ClientOid   string `json:"clientOid"`
-	Side        string `json:"side"`
-	Symbol      string `json:"symbol"`
-	Type        string `json:"type,omitempty"`
-	Size        string `json:"size,omitempty"`
-	Price       string `json:"price,omitempty"`
-	Funds       string `json:"funds,omitempty"`
-	TimeInForce string `json:"timeInForce,omitempty"`
+	ClientOid   string          `json:"clientOid"`
+	Side        string          `json:"side"`
+	Symbol      string          `json:"symbol"`
+	Type        string          `json:"type,omitempty"`
+	Size        decimal.Decimal `json:"size,omitempty"`
+	Price       decimal.Decimal `json:"price,omitempty"`
+	Funds       decimal.Decimal `json:"funds,omitempty"`
+	TimeInForce string          `json:"timeInForce,omitempty"`
 }
 
 type OrderResponse struct {

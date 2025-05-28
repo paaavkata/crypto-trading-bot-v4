@@ -31,11 +31,9 @@ func (r *Repository) BulkInsertPriceData(ctx context.Context, data []models.Pric
 
 	start := time.Now()
 
-	// Build bulk insert query
 	query := `
         INSERT INTO price_data (symbol, timestamp, open, high, low, close, volume, quote_volume, change_rate, change_price)
         VALUES `
-
 	values := make([]string, 0, len(data))
 	args := make([]interface{}, 0, len(data)*10)
 
@@ -43,8 +41,12 @@ func (r *Repository) BulkInsertPriceData(ctx context.Context, data []models.Pric
 		values = append(values, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
 			i*10+1, i*10+2, i*10+3, i*10+4, i*10+5, i*10+6, i*10+7, i*10+8, i*10+9, i*10+10))
 
-		args = append(args, price.Symbol, price.Timestamp, price.Open, price.High,
-			price.Low, price.Close, price.Volume, price.QuoteVolume, price.ChangeRate, price.ChangePrice)
+		args = append(args,
+			price.Symbol, price.Timestamp,
+			price.Open, price.High, price.Low, price.Close,
+			price.Volume, price.QuoteVolume,
+			price.ChangeRate, price.ChangePrice,
+		)
 	}
 
 	query += strings.Join(values, ", ")
@@ -92,71 +94,4 @@ func (r *Repository) GetLatestPriceData(ctx context.Context, symbol string) (*mo
 	}
 
 	return &price, nil
-}
-
-func (r *Repository) CleanupOldData(ctx context.Context, retentionDays int) error {
-	query := `DELETE FROM price_data WHERE created_at < $1`
-	cutoffTime := time.Now().AddDate(0, 0, -retentionDays)
-
-	result, err := r.db.ExecContext(ctx, query, cutoffTime)
-	if err != nil {
-		return fmt.Errorf("failed to cleanup old data: %w", err)
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	r.logger.WithFields(logrus.Fields{
-		"rows_deleted":   rowsAffected,
-		"cutoff_time":    cutoffTime,
-		"retention_days": retentionDays,
-	}).Info("Cleaned up old price data")
-
-	return nil
-}
-
-func (r *Repository) UpdateTradingPairs(ctx context.Context, symbols []string) error {
-	if len(symbols) == 0 {
-		return nil
-	}
-
-	// Build bulk upsert for trading pairs
-	query := `
-        INSERT INTO trading_pairs (symbol, base_asset, quote_asset, status, last_updated)
-        VALUES `
-
-	values := make([]string, 0, len(symbols))
-	args := make([]interface{}, 0, len(symbols)*5)
-
-	for i, symbol := range symbols {
-		// Parse symbol to get base and quote assets (e.g., BTC-USDT -> BTC, USDT)
-		parts := strings.Split(symbol, "-")
-		if len(parts) != 2 {
-			continue
-		}
-
-		baseAsset := parts[0]
-		quoteAsset := parts[1]
-
-		values = append(values, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d)",
-			i*5+1, i*5+2, i*5+3, i*5+4, i*5+5))
-
-		args = append(args, symbol, baseAsset, quoteAsset, "active", time.Now())
-	}
-
-	if len(values) == 0 {
-		return nil
-	}
-
-	query += strings.Join(values, ", ")
-	query += ` ON CONFLICT (symbol) DO UPDATE SET 
-        last_updated = EXCLUDED.last_updated,
-        status = CASE WHEN trading_pairs.status = 'inactive' THEN 'active' ELSE trading_pairs.status END`
-
-	_, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
-		r.logger.WithError(err).Error("Failed to update trading pairs")
-		return fmt.Errorf("failed to update trading pairs: %w", err)
-	}
-
-	r.logger.WithField("pairs_count", len(values)).Info("Successfully updated trading pairs")
-	return nil
 }
