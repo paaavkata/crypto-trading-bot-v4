@@ -40,82 +40,27 @@ func (f *Fetcher) FetchAllTickers(ctx context.Context) ([]models.TickerData, err
 
 	timestamp := time.Now().Truncate(time.Minute) // Round to nearest minute
 	tickers := make([]models.TickerData, 0, len(tickersResp.Ticker))
+	parseErrors := 0
 
 	for _, ticker := range tickersResp.Ticker {
-		// Parse numeric values
-		open, err := utils.ParseFloat(ticker.Last) // Use last price as open for minute data
+		tickerData, err := f.parseTickerData(ticker, timestamp)
 		if err != nil {
-			f.logger.WithField("symbol", ticker.Symbol).WithError(err).Warn("Failed to parse open price")
+			f.logger.WithFields(logrus.Fields{
+				"symbol": ticker.Symbol,
+				"error":  err.Error(),
+			}).Debug("Failed to parse ticker data")
+			parseErrors++
 			continue
 		}
 
-		high, err := utils.ParseFloat(ticker.High)
-		if err != nil {
-			f.logger.WithField("symbol", ticker.Symbol).WithError(err).Warn("Failed to parse high price")
-			continue
-		}
-
-		low, err := utils.ParseFloat(ticker.Low)
-		if err != nil {
-			f.logger.WithField("symbol", ticker.Symbol).WithError(err).Warn("Failed to parse low price")
-			continue
-		}
-
-		close, err := utils.ParseFloat(ticker.Last)
-		if err != nil {
-			f.logger.WithField("symbol", ticker.Symbol).WithError(err).Warn("Failed to parse close price")
-			continue
-		}
-
-		volume, err := utils.ParseFloat(ticker.Vol)
-		if err != nil {
-			f.logger.WithField("symbol", ticker.Symbol).WithError(err).Warn("Failed to parse volume")
-			continue
-		}
-
-		quoteVolume, err := utils.ParseFloat(ticker.VolValue)
-		if err != nil {
-			f.logger.WithField("symbol", ticker.Symbol).WithError(err).Warn("Failed to parse quote volume")
-			continue
-		}
-
-		changeRate, err := utils.ParseFloat(ticker.ChangeRate)
-		if err != nil {
-			f.logger.WithField("symbol", ticker.Symbol).WithError(err).Warn("Failed to parse change rate")
-			continue
-		}
-
-		changePrice, err := utils.ParseFloat(ticker.ChangePrice)
-		if err != nil {
-			f.logger.WithField("symbol", ticker.Symbol).WithError(err).Warn("Failed to parse change price")
-			continue
-		}
-
-		// Skip pairs with zero volume or invalid prices
-		if volume <= 0 || quoteVolume <= 0 || close <= 0 {
-			continue
-		}
-
-		tickerData := models.TickerData{
-			Symbol:      ticker.Symbol,
-			Open:        open,
-			High:        high,
-			Low:         low,
-			Close:       close,
-			Volume:      volume,
-			QuoteVolume: quoteVolume,
-			ChangeRate:  changeRate,
-			ChangePrice: changePrice,
-			Timestamp:   timestamp,
-		}
-
-		tickers = append(tickers, tickerData)
+		tickers = append(tickers, *tickerData)
 	}
 
 	duration := time.Since(start)
 	f.logger.WithFields(logrus.Fields{
 		"total_tickers": len(tickersResp.Ticker),
 		"valid_tickers": len(tickers),
+		"parse_errors":  parseErrors,
 		"duration_ms":   duration.Milliseconds(),
 		"timestamp":     timestamp,
 	}).Info("Successfully fetched and processed tickers")
@@ -141,4 +86,80 @@ func (f *Fetcher) FetchSymbols(ctx context.Context) ([]string, error) {
 
 	f.logger.WithField("symbols_count", len(symbolList)).Info("Successfully fetched trading symbols")
 	return symbolList, nil
+}
+
+func (f *Fetcher) parseTickerData(ticker kucoin.Ticker, timestamp time.Time) (*models.TickerData, error) {
+	// Parse values - allow more flexibility, normalization will handle precision
+	open, err := f.parseFloatSafe(ticker.Last, "open")
+	if err != nil {
+		return nil, err
+	}
+
+	high, err := f.parseFloatSafe(ticker.High, "high")
+	if err != nil {
+		return nil, err
+	}
+
+	low, err := f.parseFloatSafe(ticker.Low, "low")
+	if err != nil {
+		return nil, err
+	}
+
+	close, err := f.parseFloatSafe(ticker.Last, "close")
+	if err != nil {
+		return nil, err
+	}
+
+	volume, err := f.parseFloatSafe(ticker.Vol, "volume")
+	if err != nil {
+		return nil, err
+	}
+
+	quoteVolume, err := f.parseFloatSafe(ticker.VolValue, "quote_volume")
+	if err != nil {
+		return nil, err
+	}
+
+	changeRate, err := f.parseFloatSafe(ticker.ChangeRate, "change_rate")
+	if err != nil {
+		return nil, err
+	}
+
+	changePrice, err := f.parseFloatSafe(ticker.ChangePrice, "change_price")
+	if err != nil {
+		return nil, err
+	}
+
+	// Only reject completely invalid data - let normalization handle the rest
+	if close <= 0 || high <= 0 || low <= 0 || open <= 0 {
+		return nil, fmt.Errorf("invalid prices: open=%.12f, high=%.12f, low=%.12f, close=%.12f",
+			open, high, low, close)
+	}
+
+	return &models.TickerData{
+		Symbol:      ticker.Symbol,
+		Open:        open,
+		High:        high,
+		Low:         low,
+		Close:       close,
+		Volume:      volume,
+		QuoteVolume: quoteVolume,
+		ChangeRate:  changeRate,
+		ChangePrice: changePrice,
+		Timestamp:   timestamp,
+	}, nil
+}
+
+func (f *Fetcher) parseFloatSafe(value, fieldName string) (float64, error) {
+	if value == "" {
+		return 0, nil
+	}
+
+	parsed, err := utils.ParseFloat(value)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse %s '%s': %w", fieldName, value, err)
+	}
+
+	// Allow NaN and Inf here - normalization will handle them
+	return parsed, nil
 }

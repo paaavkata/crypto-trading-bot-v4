@@ -108,3 +108,44 @@ func CalculateCorrelation(x, y []float64) float64 {
 
 	return numerator / math.Sqrt(denomX*denomY)
 }
+
+func NormalizeTo(value float64, decimalPlaces int) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0.0
+	}
+
+	multiplier := math.Pow(10, float64(decimalPlaces))
+	return math.Round(value*multiplier) / multiplier
+}
+
+// CapValue caps a value to a maximum while preserving sign
+func CapValue(value, maxValue float64) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0.0
+	}
+
+	if value > maxValue {
+		return maxValue
+	}
+	if value < -maxValue {
+		return -maxValue
+	}
+	return value
+}
+
+// NormalizeDecimal normalizes a value to fit within PostgreSQL DECIMAL constraints
+func NormalizeDecimal(value float64, totalDigits, decimalPlaces int) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0.0
+	}
+
+	// Calculate maximum value based on total digits and decimal places
+	integerDigits := totalDigits - decimalPlaces
+	maxValue := math.Pow(10, float64(integerDigits)) - math.Pow(10, -float64(decimalPlaces))
+
+	// Cap the value
+	cappedValue := CapValue(value, maxValue)
+
+	// Round to specified decimal places
+	return NormalizeTo(cappedValue, decimalPlaces)
+}

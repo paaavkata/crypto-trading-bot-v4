@@ -37,7 +37,7 @@ priceCollector:
     - name: COLLECTION_INTERVAL_SECONDS
       value: "60"
     - name: BATCH_SIZE
-      value: "1000"
+      value: "500"
 tradingEngine:
   image:
     name: trading-engine

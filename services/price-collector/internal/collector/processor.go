@@ -2,6 +2,8 @@ package collector
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"time"
 
 	"github.com/paaavkata/crypto-trading-bot-v4/price-collector/internal/database"
@@ -29,32 +31,61 @@ func (p *Processor) ProcessTickers(ctx context.Context, tickers []models.TickerD
 
 	start := time.Now()
 
-	// Convert ticker data to price data
+	// Convert ticker data to price data with normalization
 	priceData := make([]models.PriceData, 0, len(tickers))
 	symbols := make([]string, 0, len(tickers))
+	normalizedCount := 0
 
 	for _, ticker := range tickers {
+		// Normalize data to fit database precision limits
+		normalizedTicker := p.normalizePriceData(ticker)
+
+		// Basic validation (just check for completely invalid data)
+		if !p.isBasicDataValid(normalizedTicker) {
+			p.logger.WithFields(logrus.Fields{
+				"symbol": ticker.Symbol,
+				"reason": "invalid after normalization",
+			}).Debug("Skipping completely invalid data")
+			continue
+		}
+
+		// Track if normalization occurred
+		if p.wasNormalized(ticker, normalizedTicker) {
+			normalizedCount++
+			p.logger.WithFields(logrus.Fields{
+				"symbol":     ticker.Symbol,
+				"original":   p.formatOriginalData(ticker),
+				"normalized": p.formatNormalizedData(normalizedTicker),
+			}).Debug("Data normalized for database storage")
+		}
+
 		price := models.PriceData{
-			Symbol:      ticker.Symbol,
-			Timestamp:   ticker.Timestamp,
-			Open:        ticker.Open,
-			High:        ticker.High,
-			Low:         ticker.Low,
-			Close:       ticker.Close,
-			Volume:      ticker.Volume,
-			QuoteVolume: ticker.QuoteVolume,
-			ChangeRate:  ticker.ChangeRate,
-			ChangePrice: ticker.ChangePrice,
+			Symbol:      normalizedTicker.Symbol,
+			Timestamp:   normalizedTicker.Timestamp,
+			Open:        normalizedTicker.Open,
+			High:        normalizedTicker.High,
+			Low:         normalizedTicker.Low,
+			Close:       normalizedTicker.Close,
+			Volume:      normalizedTicker.Volume,
+			QuoteVolume: normalizedTicker.QuoteVolume,
+			ChangeRate:  normalizedTicker.ChangeRate,
+			ChangePrice: normalizedTicker.ChangePrice,
 		}
 
 		priceData = append(priceData, price)
-		symbols = append(symbols, ticker.Symbol)
+		symbols = append(symbols, normalizedTicker.Symbol)
+	}
+
+	if normalizedCount > 0 {
+		p.logger.WithField("normalized_count", normalizedCount).Info("Normalized price data for database storage")
 	}
 
 	// Bulk insert price data
-	if err := p.repo.BulkInsertPriceData(ctx, priceData); err != nil {
-		p.logger.WithError(err).Error("Failed to insert price data")
-		return err
+	if len(priceData) > 0 {
+		if err := p.repo.BulkInsertPriceData(ctx, priceData); err != nil {
+			p.logger.WithError(err).Error("Failed to insert price data")
+			return err
+		}
 	}
 
 	// Update trading pairs
@@ -65,11 +96,162 @@ func (p *Processor) ProcessTickers(ctx context.Context, tickers []models.TickerD
 
 	duration := time.Since(start)
 	p.logger.WithFields(logrus.Fields{
-		"processed_count": len(priceData),
-		"duration_ms":     duration.Milliseconds(),
+		"processed_count":  len(priceData),
+		"normalized_count": normalizedCount,
+		"duration_ms":      duration.Milliseconds(),
 	}).Info("Successfully processed tickers")
 
 	return nil
+}
+func (p *Processor) normalizePriceData(ticker models.TickerData) models.TickerData {
+	return models.TickerData{
+		Symbol:      ticker.Symbol,
+		Timestamp:   ticker.Timestamp,
+		Open:        p.normalizePriceField(ticker.Open),
+		High:        p.normalizePriceField(ticker.High),
+		Low:         p.normalizePriceField(ticker.Low),
+		Close:       p.normalizePriceField(ticker.Close),
+		Volume:      p.normalizeVolumeField(ticker.Volume),
+		QuoteVolume: p.normalizeVolumeField(ticker.QuoteVolume),
+		ChangeRate:  p.normalizeChangeRateField(ticker.ChangeRate),
+		ChangePrice: p.normalizePriceField(ticker.ChangePrice),
+	}
+}
+
+// Normalize price fields to fit DECIMAL(30,12) - 30 total digits, 12 after decimal
+func (p *Processor) normalizePriceField(value float64) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0.0
+	}
+
+	// Handle negative values
+	sign := 1.0
+	if value < 0 {
+		sign = -1.0
+		value = -value
+	}
+
+	// DECIMAL(30,12) means max 18 digits before decimal, 12 after
+	// Max value: 999999999999999999.999999999999
+	const maxValue = 999999999999999999.0
+	const precision = 12
+
+	if value > maxValue {
+		p.logger.WithFields(logrus.Fields{
+			"original_value": value * sign,
+			"capped_value":   maxValue * sign,
+		}).Debug("Price value capped to maximum")
+		return maxValue * sign
+	}
+
+	// Round to 12 decimal places
+	multiplier := math.Pow(10, precision)
+	return math.Round(value*multiplier) / multiplier * sign
+}
+
+// Normalize volume fields to fit DECIMAL(30,8) - 30 total digits, 8 after decimal
+func (p *Processor) normalizeVolumeField(value float64) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+		return 0.0
+	}
+
+	// DECIMAL(30,8) means max 22 digits before decimal, 8 after
+	// Max value: 9999999999999999999999.99999999
+	const maxValue = 9999999999999999999999.0
+	const precision = 8
+
+	if value > maxValue {
+		p.logger.WithFields(logrus.Fields{
+			"original_value": value,
+			"capped_value":   maxValue,
+		}).Debug("Volume value capped to maximum")
+		return maxValue
+	}
+
+	// Round to 8 decimal places
+	multiplier := math.Pow(10, precision)
+	return math.Round(value*multiplier) / multiplier
+}
+
+// Normalize change rate to fit DECIMAL(15,10) - 15 total digits, 10 after decimal
+func (p *Processor) normalizeChangeRateField(value float64) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0.0
+	}
+
+	// Handle negative values
+	sign := 1.0
+	if value < 0 {
+		sign = -1.0
+		value = -value
+	}
+
+	// DECIMAL(15,10) means max 5 digits before decimal, 10 after
+	// Max value: 99999.9999999999 (reasonable for change rates)
+	const maxValue = 99999.0
+	const precision = 10
+
+	if value > maxValue {
+		p.logger.WithFields(logrus.Fields{
+			"original_value": value * sign,
+			"capped_value":   maxValue * sign,
+		}).Debug("Change rate capped to maximum")
+		return maxValue * sign
+	}
+
+	// Round to 10 decimal places
+	multiplier := math.Pow(10, precision)
+	return math.Round(value*multiplier) / multiplier * sign
+}
+
+// Basic validation after normalization - only reject completely invalid data
+func (p *Processor) isBasicDataValid(ticker models.TickerData) bool {
+	// Only reject data that's completely unusable
+	if ticker.Open <= 0 || ticker.High <= 0 || ticker.Low <= 0 || ticker.Close <= 0 {
+		return false
+	}
+
+	// Basic logic checks
+	if ticker.High < ticker.Low {
+		return false
+	}
+
+	if ticker.Close > ticker.High || ticker.Close < ticker.Low {
+		return false
+	}
+
+	if ticker.Open > ticker.High || ticker.Open < ticker.Low {
+		return false
+	}
+
+	return true
+}
+
+// Check if normalization occurred
+func (p *Processor) wasNormalized(original, normalized models.TickerData) bool {
+	tolerance := 1e-12 // Very small tolerance for floating point comparison
+
+	return math.Abs(original.Open-normalized.Open) > tolerance ||
+		math.Abs(original.High-normalized.High) > tolerance ||
+		math.Abs(original.Low-normalized.Low) > tolerance ||
+		math.Abs(original.Close-normalized.Close) > tolerance ||
+		math.Abs(original.Volume-normalized.Volume) > tolerance ||
+		math.Abs(original.QuoteVolume-normalized.QuoteVolume) > tolerance ||
+		math.Abs(original.ChangeRate-normalized.ChangeRate) > tolerance ||
+		math.Abs(original.ChangePrice-normalized.ChangePrice) > tolerance
+}
+
+// Helper functions for logging
+func (p *Processor) formatOriginalData(ticker models.TickerData) string {
+	return fmt.Sprintf("O:%.12f H:%.12f L:%.12f C:%.12f V:%.8f QV:%.8f CR:%.10f CP:%.12f",
+		ticker.Open, ticker.High, ticker.Low, ticker.Close,
+		ticker.Volume, ticker.QuoteVolume, ticker.ChangeRate, ticker.ChangePrice)
+}
+
+func (p *Processor) formatNormalizedData(ticker models.TickerData) string {
+	return fmt.Sprintf("O:%.12f H:%.12f L:%.12f C:%.12f V:%.8f QV:%.8f CR:%.10f CP:%.12f",
+		ticker.Open, ticker.High, ticker.Low, ticker.Close,
+		ticker.Volume, ticker.QuoteVolume, ticker.ChangeRate, ticker.ChangePrice)
 }
 
 func (p *Processor) CleanupOldData(ctx context.Context) error {
