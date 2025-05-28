@@ -142,13 +142,128 @@ func (a *Analyzer) analyzeSinglePair(ctx context.Context, pair models.TradingPai
 }
 
 func (a *Analyzer) determineRiskLevel(analysis models.PairAnalysis) string {
-	// Risk assessment based on volatility and correlation
-	if analysis.Volatility > 0.06 || analysis.CorrelationBTC < 0.3 {
+	// Enhanced risk assessment with market regime detection
+	riskScore := 0.0
+	
+	// Volatility component (35% weight)
+	volatilityRisk := 0.0
+	if analysis.Volatility > 0.12 {
+		volatilityRisk = 4.0
+	} else if analysis.Volatility > 0.08 {
+		volatilityRisk = 3.0
+	} else if analysis.Volatility > 0.05 {
+		volatilityRisk = 2.0
+	} else if analysis.Volatility > 0.03 {
+		volatilityRisk = 1.5
+	} else {
+		volatilityRisk = 1.0
+	}
+	riskScore += volatilityRisk * 0.35
+	
+	// Correlation component (25% weight) - Low correlation increases risk
+	correlationRisk := 0.0
+	absCorrelation := math.Abs(analysis.CorrelationBTC)
+	if absCorrelation < 0.2 {
+		correlationRisk = 4.0 // Very uncorrelated = higher risk
+	} else if absCorrelation < 0.4 {
+		correlationRisk = 3.0
+	} else if absCorrelation < 0.6 {
+		correlationRisk = 2.0
+	} else {
+		correlationRisk = 1.0 // High correlation = lower risk
+	}
+	riskScore += correlationRisk * 0.25
+	
+	// Volume stability component (20% weight)
+	volumeRisk := 0.0
+	if analysis.Volume24hUSDT < 1000000 {
+		volumeRisk = 4.0
+	} else if analysis.Volume24hUSDT < 3000000 {
+		volumeRisk = 3.0
+	} else if analysis.Volume24hUSDT < 10000000 {
+		volumeRisk = 2.0
+	} else {
+		volumeRisk = 1.0
+	}
+	riskScore += volumeRisk * 0.20
+	
+	// ATR/Volatility ratio component (10% weight) - High ATR relative to volatility indicates instability
+	atrRisk := 0.0
+	if analysis.Volatility > 0 {
+		atrRatio := analysis.ATR14 / analysis.Volatility
+		if atrRatio > 2.0 {
+			atrRisk = 3.0
+		} else if atrRatio > 1.5 {
+			atrRisk = 2.0
+		} else {
+			atrRisk = 1.0
+		}
+	} else {
+		atrRisk = 2.0
+	}
+	riskScore += atrRisk * 0.10
+	
+	// Price momentum component (10% weight) - Add momentum analysis
+	momentumRisk := a.calculateMomentumRisk(analysis)
+	riskScore += momentumRisk * 0.10
+	
+	// Normalize risk score (0-4 scale)
+	normalizedRisk := riskScore / 4.0
+	
+	a.logger.WithFields(logrus.Fields{
+		"symbol":          analysis.Symbol,
+		"volatility_risk": volatilityRisk,
+		"correlation_risk": correlationRisk,
+		"volume_risk":     volumeRisk,
+		"atr_risk":        atrRisk,
+		"momentum_risk":   momentumRisk,
+		"final_risk_score": normalizedRisk,
+	}).Debug("Risk assessment completed")
+	
+	if normalizedRisk >= 0.75 {
 		return "high"
-	} else if analysis.Volatility > 0.04 || analysis.CorrelationBTC < 0.6 {
+	} else if normalizedRisk >= 0.5 {
 		return "medium"
 	}
 	return "low"
+}
+
+func (a *Analyzer) calculateMomentumRisk(analysis models.PairAnalysis) float64 {
+	// Simple momentum risk calculation based on price data
+	if len(analysis.PriceData) < 10 {
+		return 2.0 // Default medium risk for insufficient data
+	}
+	
+	// Calculate short-term vs long-term price change
+	recent := analysis.PriceData[:5]   // Last 5 periods
+	older := analysis.PriceData[5:10]  // Previous 5 periods
+	
+	recentAvg := 0.0
+	olderAvg := 0.0
+	
+	for _, price := range recent {
+		recentAvg += price.Close
+	}
+	recentAvg /= float64(len(recent))
+	
+	for _, price := range older {
+		olderAvg += price.Close
+	}
+	olderAvg /= float64(len(older))
+	
+	if olderAvg > 0 {
+		momentumChange := (recentAvg - olderAvg) / olderAvg
+		
+		// High absolute momentum indicates higher risk
+		absMomentum := math.Abs(momentumChange)
+		if absMomentum > 0.1 {
+			return 3.0 // High momentum = high risk
+		} else if absMomentum > 0.05 {
+			return 2.0 // Medium momentum = medium risk
+		}
+	}
+	
+	return 1.0 // Low momentum = low risk
 }
 
 func (a *Analyzer) SelectTopPairs(analyses []models.PairAnalysis, maxPairs int) []models.PairAnalysis {
