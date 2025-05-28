@@ -50,3 +50,5 @@ tradingEngine:
       value: "60"
     - name: DEFAULT_POSITION_SIZE_USDT
       value: "10"
+    - name: KUCOIN_SANDBOX
+      value: "true"

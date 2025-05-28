@@ -24,15 +24,14 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 	logger.WithFields(logrus.Fields{
-		"db_host":             cfg.Database.Host,
-		"db_port":             cfg.Database.Port,
+		"db_uri":              cfg.Database.DbUri,
 		"evaluation_interval": cfg.EvaluationInterval,
 		"min_volume_usdt":     cfg.SelectionCriteria.MinVolumeUSDT,
 		"max_active_pairs":    cfg.SelectionCriteria.MaxActivesPairs,
 	}).Info("Configuration loaded")
 
 	// Initialize database connection
-	db, err := database.NewConnection(cfg.Database, logger)
+	db, err := database.NewConnection(cfg.Database.DbUri, logger)
 	if err != nil {
 		logger.WithError(err).Fatal("Failed to connect to database")
 	}

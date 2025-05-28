@@ -16,4 +16,7 @@ helm -n ${NAMESPACE} upgrade \
     --set "pairSelector.image.tag=${TAG}" \
     --set "priceCollector.image.tag=${TAG}" \
     --set "tradingEngine.image.tag=${TAG}" \
+    --set "markets.kucoin.apiKey=${KUCOIN_API_KEY}" \
+    --set "markets.kucoin.apiSecret=${KUCOIN_API_SECRET}" \
+    --set "markets.kucoin.apiPassphrase=${KUCOIN_API_PASSPHRASE}" \
     --install $APP_NAME $CHART --version $CHART_VERSION

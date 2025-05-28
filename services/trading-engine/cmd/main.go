@@ -27,15 +27,14 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 	logger.WithFields(logrus.Fields{
-		"db_host":                cfg.Database.Host,
-		"db_port":                cfg.Database.Port,
+		"db_url":                 cfg.Database.DbUri,
 		"trading_interval":       cfg.TradingInterval,
 		"max_positions_per_pair": cfg.MaxPositionsPerPair,
 		"default_position_size":  cfg.DefaultPositionSize,
 	}).Info("Configuration loaded")
 
 	// Initialize database connection
-	db, err := tradeDB.NewConnection(cfg.Database, logger)
+	db, err := tradeDB.NewConnection(cfg.Database.DbUri, logger)
 	if err != nil {
 		logger.WithError(err).Fatal("Failed to connect to database")
 	}

@@ -3,7 +3,7 @@ module github.com/paaavkata/crypto-trading-bot-v4/pair-selector
 go 1.23.3
 
 require (
-	github.com/paaavkata/crypto-trading-bot-v4/shared v0.0.0-20250527224035-5912f22f3b08
+	github.com/paaavkata/crypto-trading-bot-v4/shared v0.0.0-20250528155433-b5b9ac4e36cc
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.3
 )

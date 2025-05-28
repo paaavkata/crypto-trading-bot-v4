@@ -19,12 +19,7 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		Database: database.Config{
-			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnvInt("DB_PORT", 5432),
-			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", ""),
-			DBName:   getEnv("DB_NAME", "crypto_trading"),
-			SSLMode:  getEnv("DB_SSL_MODE", "disable"),
+			DbUri: getEnv("DB_URI", "localhost"),
 		},
 		SelectionCriteria: models.SelectionCriteria{
 			MinVolumeUSDT:     getEnvFloat("MIN_VOLUME_USDT", 1000000), // $1M

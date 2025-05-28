@@ -26,14 +26,13 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 	logger.WithFields(logrus.Fields{
-		"db_host":             cfg.Database.Host,
-		"db_port":             cfg.Database.Port,
+		"db_uri":              cfg.Database.DbUri,
 		"collection_interval": cfg.CollectionInterval,
 		"batch_size":          cfg.BatchSize,
 	}).Info("Configuration loaded")
 
 	// Initialize database connection
-	db, err := database.NewConnection(cfg.Database, logger)
+	db, err := database.NewConnection(cfg.Database.DbUri, logger)
 	if err != nil {
 		logger.WithError(err).Fatal("Failed to connect to database")
 	}
