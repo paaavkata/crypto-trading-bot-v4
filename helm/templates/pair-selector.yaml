@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.pairSelector.deployment.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      serviceAccountName: {{ .Release.Name }}
+      containers:
+      - name: {{ .Release.Name }}
+        image: "{{ .Values.registry }}/{{ .Values.app }}/{{ .Values.pairSelector.image.name }}:{{ .Values.pairSelector.image.tag }}"
+        imagePullPolicy: {{ .Values.pairSelector.image.pullPolicy }}
+        env:
+        - name: KUCOIN_API_KEY
+          value: {{ .Values.markets.kucoin.apiKey | quote }}
+        - name: KUCOIN_API_SECRET
+          value: {{ .Values.markets.kucoin.apiSecret | quote }}
+        - name: KUCOIN_API_PASSPHRASE
+          value: {{ .Values.markets.kucoin.apiPassphrase | quote }}
+        {{- range .Values.envVars }}
+        - name: {{ .name }}
+          value: {{ .value | quote }}
+        {{- end }}
+        {{- if .Values.pairSelector.envVars }}
+        {{- range .Values.pairSelector.envVars }}
+        - name: {{ .name }}
+          value: {{ .value | quote }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secretEnvVars }}
+        {{- range .Values.secretEnvVars }}
+        - name: {{ .name }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ .secretName }}
+              key: {{ .secretKey }}
+        {{- end }}
+        {{- end }}
+        resources:
+          limits:
+            cpu: 200m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 64Mi

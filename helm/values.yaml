@@ -1,0 +1,52 @@
+registry: 929572853995.dkr.ecr.eu-west-1.amazonaws.com
+app: crypto-trading-bot-v4
+markets:
+  kucoin:
+    apiKey: ""
+    apiSecret: ""
+    apiPassphrase: ""
+envVars:
+  - name: LOG_LEVEL
+    value: debug
+secretEnvVars:
+  - name: DB_URI
+    secretName: crypto-trading-db-pguser-crypto-trading-user
+    secretKey: uri
+pairSelector:
+  image:
+    name: pair-selector
+    tag: latest
+    pullPolicy: Always
+  deployment:
+    replicas: 1
+  envVars:
+    - name: EVALUATION_INTERVAL_HOURS
+      value: "4"
+    - name: MIN_VOLUME_USDT
+      value: "1000000"
+    - name: MAX_ACTIVE_PAIRS
+      value: "10"
+priceCollector:
+  image:
+    name: price-collector
+    tag: latest
+    pullPolicy: Always
+  deployment:
+    replicas: 1
+  envVars:
+    - name: COLLECTION_INTERVAL_SECONDS
+      value: "60"
+    - name: BATCH_SIZE
+      value: "1000"
+tradingEngine:
+  image:
+    image: trading-engine
+    tag: latest
+    pullPolicy: Always
+  deployment:
+    replicas: 1
+  envVars:
+    - name: TRADING_INTERVAL_SECONDS
+      value: "60"
+    - name: DEFAULT_POSITION_SIZE_USDT
+      value: "10"

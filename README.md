@@ -49,7 +49,7 @@ This project implements a comprehensive cryptocurrency trading bot using three m
 - **Diversification**: Trades up to 8 pairs simultaneously
 
 ### Technical Implementation
-- **Language**: Go 1.21
+- **Language**: Go 1.23
 - **Database**: PostgreSQL with optimized schemas
 - **Exchange**: KuCoin REST API integration
 - **Deployment**: Kubernetes-ready with health checks
@@ -94,5 +94,4 @@ Each service is designed as an independent microservice with:
 4. Deploy services to Kubernetes
 5. Monitor logs and health endpoints
 
-The system is designed to be highly resilient with proper error handling, retry logic, and monitoring capabilities suitable for production cryptocurrency trading operations.// File: services/trading-engine/go.mod
-module github.com/crypto-trading-bot/trading-engine
+The system is designed to be highly resilient with proper error handling, retry logic, and monitoring capabilities suitable for production cryptocurrency trading operations.

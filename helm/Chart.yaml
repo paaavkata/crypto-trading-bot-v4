@@ -1,0 +1,10 @@
+apiVersion: v2
+name: crypto-trading-bot-v4
+description: Golang apps that run on Kubernetes to trade cryptocurrencies.
+type: application
+version: 1.0.0
+sources:
+  - https://github.com/paaavkata/crypto-trading-bot-v4
+maintainers:
+  - name: Pavel Damyanov
+    url: https://github.com/paaavkata

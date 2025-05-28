@@ -11,12 +11,7 @@ import (
 )
 
 type Config struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	DBName   string
-	SSLMode  string
+	DbUri string
 }
 
 type DB struct {
@@ -24,11 +19,8 @@ type DB struct {
 	logger *logrus.Logger
 }
 
-func NewConnection(config Config, logger *logrus.Logger) (*DB, error) {
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		config.Host, config.Port, config.User, config.Password, config.DBName, config.SSLMode)
-
-	db, err := sql.Open("postgres", dsn)
+func NewConnection(dbUri string, logger *logrus.Logger) (*DB, error) {
+	db, err := sql.Open("postgres", dbUri)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
