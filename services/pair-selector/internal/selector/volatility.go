@@ -12,16 +12,6 @@ type VolatilityAnalyzer struct {
 	logger *logrus.Logger
 }
 
-type VolatilityMetrics struct {
-	Volatility24h float64
-	ATR14         float64
-	StdDev        float64
-}
-
-func NewVolatilityAnalyzer(logger *logrus.Logger) *VolatilityAnalyzer {
-	return &VolatilityAnalyzer{logger: logger}
-}
-
 // VolatilityMetrics holds the results of volatility analysis.
 // Note: ATR14 now uses a configurable period via SelectionCriteria.ATRPeriod.
 type VolatilityMetrics struct {

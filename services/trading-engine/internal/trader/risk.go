@@ -1,11 +1,6 @@
 package trader
 
 import (
-	"github.com/paaavkata/crypto-trading-bot-v4/trading-engine/pkg/models"
-	"github.com/sirupsen/logrus"
-)
-
-import (
 	"context"
 	"fmt"
 	"time"
@@ -22,7 +17,7 @@ type RiskManager struct {
 	portfolioTradingHaltedUntil   time.Time
 	pairFlashCrashHaltedUntil     map[string]time.Time
 	portfolioDrawdownInitialValue float64 // For more complex drawdown logic, not used in simplified version
-	isPortfolioInitialValueSet    bool      // For more complex drawdown logic
+	isPortfolioInitialValueSet    bool    // For more complex drawdown logic
 }
 
 func NewRiskManager(repo *database.Repository, config EngineConfig, logger *logrus.Logger) *RiskManager {
@@ -76,9 +71,9 @@ func (r *RiskManager) CheckPortfolioDrawdown(ctx context.Context, currentOpenPos
 	}
 
 	r.logger.WithFields(logrus.Fields{
-		"total_unrealized_pnl": totalUnrealizedPnL,
-		"total_account_balance": r.config.TotalAccountBalance,
-		"drawdown_percent": fmt.Sprintf("%.2f%%", drawdownPercent),
+		"total_unrealized_pnl":              totalUnrealizedPnL,
+		"total_account_balance":             r.config.TotalAccountBalance,
+		"drawdown_percent":                  fmt.Sprintf("%.2f%%", drawdownPercent),
 		"configured_drawdown_limit_percent": -r.config.CBPortfolioDrawdownPercent,
 	}).Debug("Portfolio drawdown check")
 
@@ -155,33 +150,31 @@ func (r *RiskManager) CheckFlashCrash(ctx context.Context, pairSymbol string, cu
 	dropPercent := ((maxPriceInWindow - currentPrice) / maxPriceInWindow) * 100.0
 
 	r.logger.WithFields(logrus.Fields{
-		"symbol":             pairSymbol,
-		"current_price":      currentPrice,
-		"max_price_in_window": maxPriceInWindow,
-		"drop_percent":       fmt.Sprintf("%.2f%%", dropPercent),
+		"symbol":                        pairSymbol,
+		"current_price":                 currentPrice,
+		"max_price_in_window":           maxPriceInWindow,
+		"drop_percent":                  fmt.Sprintf("%.2f%%", dropPercent),
 		"configured_drop_limit_percent": r.config.CBFlashCrashDropPercent,
-		"window_minutes":     r.config.CBFlashCrashWindowMinutes,
+		"window_minutes":                r.config.CBFlashCrashWindowMinutes,
 	}).Debug("Flash crash check")
-
 
 	if dropPercent >= r.config.CBFlashCrashDropPercent {
 		haltDuration := time.Duration(r.config.CBTradingHaltDurationMinutes) * time.Minute
 		r.pairFlashCrashHaltedUntil[pairSymbol] = time.Now().Add(haltDuration)
 		r.logger.WithFields(logrus.Fields{
-			"symbol":                      pairSymbol,
-			"current_price":               currentPrice,
-			"max_price_in_window":         maxPriceInWindow,
-			"calculated_drop_percent":     dropPercent,
-			"limit_percent":               r.config.CBFlashCrashDropPercent,
-			"halt_duration_minutes":       r.config.CBTradingHaltDurationMinutes,
-			"halted_until":                r.pairFlashCrashHaltedUntil[pairSymbol].Format(time.RFC3339),
+			"symbol":                  pairSymbol,
+			"current_price":           currentPrice,
+			"max_price_in_window":     maxPriceInWindow,
+			"calculated_drop_percent": dropPercent,
+			"limit_percent":           r.config.CBFlashCrashDropPercent,
+			"halt_duration_minutes":   r.config.CBTradingHaltDurationMinutes,
+			"halted_until":            r.pairFlashCrashHaltedUntil[pairSymbol].Format(time.RFC3339),
 		}).Errorf("Flash crash circuit breaker triggered for pair %s! Halting trading for this pair.", pairSymbol)
 		return true, nil // Trading for this pair halted
 	}
 
 	return false, nil // Trading for this pair not halted
 }
-
 
 func (r *RiskManager) CanTrade(pair models.SelectedPair, positions []models.Position, currentPrice float64) bool {
 	// Check maximum positions per pair

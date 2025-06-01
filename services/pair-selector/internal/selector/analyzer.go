@@ -3,6 +3,7 @@ package selector
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 
 	"github.com/paaavkata/crypto-trading-bot-v4/pair-selector/internal/database"
@@ -217,14 +218,14 @@ func (a *Analyzer) determineRiskLevel(analysis models.PairAnalysis, thresholds m
 	// The original code divided by 4.0. This implies the max possible weighted sum should be around 4.0.
 	// For now, we keep the division by 4.0. If weights or scores change, this might need adjustment or become configurable.
 	normalizedRisk := riskScore / 4.0 // TODO: Consider making normalization factor configurable or dynamically calculated.
-	
+
 	a.logger.WithFields(logrus.Fields{
-		"symbol":          analysis.Symbol,
-		"volatility_risk": volatilityRisk,
+		"symbol":           analysis.Symbol,
+		"volatility_risk":  volatilityRisk,
 		"correlation_risk": correlationRisk,
-		"volume_risk":     volumeRisk,
-		"atr_risk":        atrRisk,
-		"momentum_risk":   momentumRisk,
+		"volume_risk":      volumeRisk,
+		"atr_risk":         atrRiskValue,
+		"momentum_risk":    momentumRisk,
 		"final_risk_score": normalizedRisk,
 	}).Debug("Risk assessment completed")
 
