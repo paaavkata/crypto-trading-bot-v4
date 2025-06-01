@@ -1,4 +1,3 @@
-
 package trader
 
 import (
@@ -53,68 +52,68 @@ func (ps *PositionSizer) CalculatePositionSize(
 	riskMetrics RiskMetrics,
 	openPositions []models.Position,
 ) float64 {
-	
+
 	// Base position size
 	positionSize := ps.basePositionSize
-	
+
 	// Risk-based adjustment
 	if ps.maxRiskPerTrade > 0 {
 		stopLossPercent := 0.05 // Default 5% stop loss
 		if pair.StopLossPercent > 0 {
 			stopLossPercent = pair.StopLossPercent / 100.0
 		}
-		
+
 		// Risk amount = Portfolio Balance * Max Risk Per Trade
 		riskAmount := riskMetrics.PortfolioBalance * ps.maxRiskPerTrade
-		
+
 		// Position size = Risk Amount / (Entry Price * Stop Loss %)
 		riskBasedSize := riskAmount / (currentPrice * stopLossPercent)
-		
+
 		// Use smaller of base size and risk-based size
 		if riskBasedSize < positionSize {
 			positionSize = riskBasedSize
 		}
 	}
-	
+
 	// Kelly Criterion adjustment
 	if ps.kellyCriterionEnabled && riskMetrics.WinRate > 0 {
 		kellyFraction := ps.calculateKellyFraction(riskMetrics)
-		
+
 		// Apply Kelly fraction with cap at 25% of portfolio
 		kellySize := riskMetrics.PortfolioBalance * math.Min(kellyFraction, 0.25) / currentPrice
-		
+
 		if kellySize > 0 && kellySize < positionSize {
 			positionSize = kellySize
 		}
-		
+
 		ps.logger.WithFields(logrus.Fields{
 			"symbol":         pair.Symbol,
 			"kelly_fraction": kellyFraction,
 			"kelly_size":     kellySize,
 		}).Debug("Applied Kelly Criterion")
 	}
-	
+
 	// Volatility adjustment
 	if ps.volatilityAdjustment {
 		volatilityMultiplier := ps.calculateVolatilityMultiplier(pair.Volatility24h)
 		positionSize *= volatilityMultiplier
-		
+
 		ps.logger.WithFields(logrus.Fields{
-			"symbol":               pair.Symbol,
-			"volatility":           pair.Volatility24h,
+			"symbol":                pair.Symbol,
+			"volatility":            pair.Volatility24h,
 			"volatility_multiplier": volatilityMultiplier,
 		}).Debug("Applied volatility adjustment")
 	}
-	
+
 	// Signal strength adjustment
 	signalMultiplier := ps.calculateSignalMultiplier(signal.Strength)
 	positionSize *= signalMultiplier
-	
+
 	// Portfolio concentration limits
 	currentExposure := ps.calculateCurrentExposure(openPositions, currentPrice)
 	maxAllowedExposure := riskMetrics.PortfolioBalance * ps.maxPortfolioRisk
-	
-	if currentExposure + (positionSize * currentPrice) > maxAllowedExposure {
+
+	if currentExposure+(positionSize*currentPrice) > maxAllowedExposure {
 		remainingCapacity := maxAllowedExposure - currentExposure
 		if remainingCapacity > 0 {
 			positionSize = remainingCapacity / currentPrice
@@ -122,22 +121,22 @@ func (ps *PositionSizer) CalculatePositionSize(
 			positionSize = 0
 		}
 	}
-	
+
 	// Minimum position size check
 	minPositionUSDT := 10.0 // Minimum $10 position
-	if positionSize * currentPrice < minPositionUSDT {
+	if positionSize*currentPrice < minPositionUSDT {
 		positionSize = 0
 	}
-	
+
 	ps.logger.WithFields(logrus.Fields{
-		"symbol":            pair.Symbol,
-		"base_size":         ps.basePositionSize,
-		"final_size":        positionSize,
-		"signal_strength":   signal.Strength,
-		"current_exposure":  currentExposure,
-		"max_exposure":      maxAllowedExposure,
+		"symbol":           pair.Symbol,
+		"base_size":        ps.basePositionSize,
+		"final_size":       positionSize,
+		"signal_strength":  signal.Strength,
+		"current_exposure": currentExposure,
+		"max_exposure":     maxAllowedExposure,
 	}).Debug("Calculated position size")
-	
+
 	return positionSize
 }
 
@@ -145,20 +144,20 @@ func (ps *PositionSizer) calculateKellyFraction(metrics RiskMetrics) float64 {
 	if metrics.AverageLoss <= 0 || metrics.WinRate <= 0 || metrics.WinRate >= 1 {
 		return 0
 	}
-	
+
 	// Kelly Criterion: f = (bp - q) / b
 	// where:
 	// f = fraction of capital to wager
 	// b = odds received on the wager (average win / average loss)
 	// p = probability of winning (win rate)
 	// q = probability of losing (1 - win rate)
-	
+
 	b := metrics.AverageWin / metrics.AverageLoss
 	p := metrics.WinRate
 	q := 1 - p
-	
+
 	kellyFraction := (b*p - q) / b
-	
+
 	// Cap Kelly fraction to prevent over-leverage
 	return math.Max(0, math.Min(kellyFraction, 0.25))
 }
@@ -167,13 +166,13 @@ func (ps *PositionSizer) calculateVolatilityMultiplier(volatility float64) float
 	// Inverse relationship: higher volatility = smaller position
 	// Target volatility: 5%
 	targetVolatility := 0.05
-	
+
 	if volatility <= 0 {
 		return 1.0
 	}
-	
+
 	multiplier := targetVolatility / volatility
-	
+
 	// Cap between 0.5 and 2.0
 	return math.Max(0.5, math.Min(multiplier, 2.0))
 }
@@ -186,7 +185,7 @@ func (ps *PositionSizer) calculateSignalMultiplier(strength float64) float64 {
 
 func (ps *PositionSizer) calculateCurrentExposure(positions []models.Position, currentPrice float64) float64 {
 	totalExposure := 0.0
-	
+
 	for _, position := range positions {
 		if position.Status == "open" {
 			// Calculate current value of position
@@ -194,7 +193,7 @@ func (ps *PositionSizer) calculateCurrentExposure(positions []models.Position, c
 			totalExposure += positionValue
 		}
 	}
-	
+
 	return totalExposure
 }
 
@@ -204,13 +203,13 @@ func (ps *PositionSizer) CalculateStopLoss(
 	volatility float64,
 	side string,
 ) float64 {
-	
+
 	// Base stop loss: 2x ATR or 5%, whichever is smaller
 	baseStopPercent := math.Min(volatility*2, 0.05)
-	
+
 	// Minimum stop loss: 2%
 	stopPercent := math.Max(baseStopPercent, 0.02)
-	
+
 	if side == "buy" {
 		return entryPrice * (1 - stopPercent)
 	} else {
@@ -225,14 +224,14 @@ func (ps *PositionSizer) CalculateTakeProfit(
 	side string,
 	riskRewardRatio float64,
 ) float64 {
-	
+
 	if riskRewardRatio <= 0 {
 		riskRewardRatio = 2.0 // Default 1:2 risk-reward
 	}
-	
+
 	stopLossDistance := math.Abs(entryPrice - stopLossPrice)
 	takeProfitDistance := stopLossDistance * riskRewardRatio
-	
+
 	if side == "buy" {
 		return entryPrice + takeProfitDistance
 	} else {
@@ -243,13 +242,13 @@ func (ps *PositionSizer) CalculateTakeProfit(
 // UpdateRiskMetrics calculates current risk metrics from trading history
 func (ps *PositionSizer) UpdateRiskMetrics(positions []models.Position) RiskMetrics {
 	closedPositions := []models.Position{}
-	
+
 	for _, pos := range positions {
 		if pos.Status == "closed" && pos.RealizedPnL != 0 {
 			closedPositions = append(closedPositions, pos)
 		}
 	}
-	
+
 	if len(closedPositions) == 0 {
 		return RiskMetrics{
 			WinRate:     0.5, // Default assumption
@@ -257,15 +256,15 @@ func (ps *PositionSizer) UpdateRiskMetrics(positions []models.Position) RiskMetr
 			AverageLoss: 50,
 		}
 	}
-	
+
 	wins := 0
 	totalWin := 0.0
 	totalLoss := 0.0
 	totalPnL := 0.0
-	
+
 	for _, pos := range closedPositions {
 		totalPnL += pos.RealizedPnL
-		
+
 		if pos.RealizedPnL > 0 {
 			wins++
 			totalWin += pos.RealizedPnL
@@ -273,19 +272,19 @@ func (ps *PositionSizer) UpdateRiskMetrics(positions []models.Position) RiskMetr
 			totalLoss += math.Abs(pos.RealizedPnL)
 		}
 	}
-	
+
 	winRate := float64(wins) / float64(len(closedPositions))
 	avgWin := 0.0
 	avgLoss := 0.0
-	
+
 	if wins > 0 {
 		avgWin = totalWin / float64(wins)
 	}
-	
+
 	if len(closedPositions)-wins > 0 {
 		avgLoss = totalLoss / float64(len(closedPositions)-wins)
 	}
-	
+
 	return RiskMetrics{
 		WinRate:     winRate,
 		AverageWin:  avgWin,

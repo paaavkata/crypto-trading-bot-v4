@@ -61,6 +61,7 @@ type Signal struct {
 	Strength  float64 // 0.0 to 1.0
 	Timestamp time.Time
 	Reason    string
+	Metadata  map[string]interface{} // Additional data for the signal
 }
 
 type GridLevel struct {
@@ -80,6 +81,7 @@ type SelectedPair struct {
 	ATRScore         float64   `db:"atr_score"`
 	VolumeScore      float64   `db:"volume_score"`
 	CorrelationScore float64   `db:"correlation_score"`
+	StopLossPercent  float64   `db:"stop_loss_percent"`
 	RiskLevel        string    `db:"risk_level"`
 	Status           string    `db:"status"`
 	SelectedAt       time.Time `db:"selected_at"`
