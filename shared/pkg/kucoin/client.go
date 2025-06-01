@@ -200,3 +200,69 @@ func (c *Client) PlaceOrder(order OrderRequest) (*OrderResponse, error) {
 
 	return &orderResp, nil
 }
+
+func (c *Client) GetOrder(ctx context.Context, orderID string) (*KucoinOrderDetail, error) {
+	endpoint := fmt.Sprintf("/api/v1/orders/%s", orderID)
+
+	req := c.client.R().SetContext(ctx)
+	// GetOrder is a private endpoint and requires authentication
+	c.setAuthHeaders(req, "GET", endpoint, "")
+
+	resp, err := req.Get(endpoint)
+	if err != nil {
+		c.logger.WithError(err).WithField("order_id", orderID).Error("Failed to fetch order details")
+		return nil, fmt.Errorf("failed to fetch order details for order %s: %w", orderID, err)
+	}
+
+	var apiResp APIResponse
+	if err := json.Unmarshal(resp.Body(), &apiResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal API response for order %s: %w", orderID, err)
+	}
+
+	if apiResp.Code != "200000" {
+		// Specific check for order not exist
+		if apiResp.Code == "400100" && apiResp.Msg == "order_not_exist" {
+			c.logger.WithField("order_id", orderID).Warn("Order not found on Kucoin")
+			return nil, fmt.Errorf("order %s not found on Kucoin: %w (API Code: %s, Msg: %s)", orderID, err, apiResp.Code, apiResp.Msg)
+		}
+		return nil, fmt.Errorf("API error for order %s: Code %s, Msg: %s", orderID, apiResp.Code, apiResp.Msg)
+	}
+
+	dataBytes, err := json.Marshal(apiResp.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal data for order %s: %w", orderID, err)
+	}
+
+	var orderDetail KucoinOrderDetail
+	if err := json.Unmarshal(dataBytes, &orderDetail); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal order detail for order %s: %w", orderID, err)
+	}
+
+	// Kucoin's /api/v1/orders/{orderId} endpoint returns isActive.
+	// We can infer a more conventional 'status' if needed, or the caller can use isActive.
+	// For example:
+	if !orderDetail.IsActive && orderDetail.DealSize == orderDetail.Size {
+		orderDetail.Status = "filled" // Or "done"
+	} else if !orderDetail.IsActive && orderDetail.CancelExist { // Assuming CancelExist becomes false if fully filled before any cancel action
+		orderDetail.Status = "canceled"
+	} else if orderDetail.IsActive {
+		orderDetail.Status = "active" // Or "open", "pending"
+	} else {
+		// Could be partially filled and then canceled, or other edge cases.
+		// Rely on isActive and filled amounts primarily if direct status field is missing/ambiguous.
+		orderDetail.Status = "unknown" // Default if logic cannot determine
+	}
+
+
+	c.logger.WithFields(logrus.Fields{
+		"order_id":   orderID,
+		"symbol":     orderDetail.Symbol,
+		"side":       orderDetail.Side,
+		"deal_size":  orderDetail.DealSize,
+		"deal_funds": orderDetail.DealFunds,
+		"is_active":  orderDetail.IsActive,
+		"inferred_status": orderDetail.Status,
+	}).Debug("Successfully fetched order details")
+
+	return &orderDetail, nil
+}

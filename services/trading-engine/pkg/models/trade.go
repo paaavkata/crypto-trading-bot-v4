@@ -54,6 +54,25 @@ type TradingConfig struct {
 	UpdatedAt         time.Time `db:"updated_at"`
 }
 
+// OrderDetail represents the detailed state of an order, typically fetched from the exchange.
+type OrderDetail struct {
+	ID            string    `json:"id"` // Exchange's Order ID
+	ClientOid     string    `json:"client_oid"`
+	Symbol        string    `json:"symbol"`
+	Side          string    `json:"side"`   // "buy" or "sell"
+	Type          string    `json:"type"`   // "limit", "market", etc.
+	Price         float64   `json:"price"`  // Original order price
+	Size          float64   `json:"size"`   // Original order quantity
+	DealFunds     float64   `json:"deal_funds"` // Executed amount in quote currency
+	DealSize      float64   `json:"deal_size"`  // Executed amount in base currency (filled quantity)
+	Fee           float64   `json:"fee"`
+	FeeCurrency   string    `json:"fee_currency"`
+	IsActive      bool      `json:"is_active"` // Is the order still active on the exchange?
+	Status        string    `json:"status"`    // Standardized status: "pending", "open", "filled", "partially_filled", "canceled", "rejected", "error"
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"` // Could be the time of the last fill or status change from exchange
+}
+
 type Signal struct {
 	Symbol    string
 	Action    string // 'BUY', 'SELL', 'HOLD'

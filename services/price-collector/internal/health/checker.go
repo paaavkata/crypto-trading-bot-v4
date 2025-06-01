@@ -68,8 +68,10 @@ func (h *HealthChecker) CheckHealth(ctx context.Context) HealthStatus {
 
 func (h *HealthChecker) StartServer(port string) *http.Server {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", h.Handler())
-	mux.HandleFunc("/ready", h.Handler()) // Kubernetes readiness probe
+	handler := h.Handler()
+	mux.HandleFunc("/health", handler)
+	mux.HandleFunc("/ready", handler) // Kubernetes readiness probe
+	mux.HandleFunc("/healthz", handler) // Added for standard /healthz endpoint
 
 	server := &http.Server{
 		Addr:         ":" + port,
