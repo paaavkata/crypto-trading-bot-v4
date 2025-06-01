@@ -22,7 +22,19 @@ func NewVolatilityAnalyzer(logger *logrus.Logger) *VolatilityAnalyzer {
 	return &VolatilityAnalyzer{logger: logger}
 }
 
-func (v *VolatilityAnalyzer) AnalyzeVolatility(priceData []models.PricePoint) VolatilityMetrics {
+// VolatilityMetrics holds the results of volatility analysis.
+// Note: ATR14 now uses a configurable period via SelectionCriteria.ATRPeriod.
+type VolatilityMetrics struct {
+	Volatility24h float64
+	ATR14         float64 // Represents ATR calculated with criteria.ATRPeriod
+	StdDev        float64
+}
+
+func NewVolatilityAnalyzer(logger *logrus.Logger) *VolatilityAnalyzer {
+	return &VolatilityAnalyzer{logger: logger}
+}
+
+func (v *VolatilityAnalyzer) AnalyzeVolatility(priceData []models.PricePoint, criteria models.SelectionCriteria) VolatilityMetrics {
 	if len(priceData) < 2 {
 		return VolatilityMetrics{}
 	}
@@ -41,8 +53,12 @@ func (v *VolatilityAnalyzer) AnalyzeVolatility(priceData []models.PricePoint) Vo
 	// Calculate 24h volatility (standard deviation of returns)
 	volatility := utils.CalculateVolatility(closes)
 
-	// Calculate ATR (Average True Range) for last 14 periods or available data
-	atrPeriod := 14
+	// Calculate ATR (Average True Range) using the configured period
+	atrPeriod := criteria.ATRPeriod
+	if atrPeriod <= 0 { // Default to 14 if not specified or invalid
+		v.logger.Warnf("Invalid ATRPeriod configured: %d. Defaulting to 14.", criteria.ATRPeriod)
+		atrPeriod = 14
+	}
 	if len(priceData) < atrPeriod {
 		atrPeriod = len(priceData)
 	}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time" // Added import for time package
 
 	"github.com/paaavkata/crypto-trading-bot-v4/trading-engine/pkg/models"
 	"github.com/sirupsen/logrus"
@@ -31,6 +32,13 @@ func NewGenerator(logger *logrus.Logger) *Generator {
 }
 
 func (g *Generator) GenerateSignal(ctx context.Context, symbol string, currentPrice float64) models.Signal {
+	// ************************************************************************************
+	// ** WARNING: THIS SIGNAL GENERATOR IS A PLACEHOLDER AND USES SIMULATED DATA!       **
+	// ** IT IS FOR DEMONSTRATION PURPOSES ONLY AND MUST NOT BE USED FOR LIVE TRADING.   **
+	// ** Real historical data and proper technical indicator libraries are required     **
+	// ** for any production use.                                                        **
+	// ************************************************************************************
+
 	// In a real implementation, you would fetch historical price data here
 	// For now, we'll use simplified logic with some basic technical analysis concepts
 	
@@ -129,6 +137,12 @@ func (g *Generator) GenerateSignal(ctx context.Context, symbol string, currentPr
 }
 
 func (g *Generator) calculateTechnicalIndicators(symbol string, currentPrice float64) TechnicalIndicators {
+	// ************************************************************************************
+	// ** WARNING: THIS TECHNICAL INDICATOR CALCULATION IS A PLACEHOLDER!                **
+	// ** IT USES SIMULATED DATA AND SIMPLISTIC LOGIC.                                   **
+	// ** DO NOT USE FOR LIVE TRADING. Integrate real data and robust TA libraries.      **
+	// ************************************************************************************
+
 	// Simplified calculation - in production, this would use real historical data
 	// and proper technical analysis libraries
 	
@@ -151,11 +165,18 @@ func (g *Generator) calculateTechnicalIndicators(symbol string, currentPrice flo
 }
 
 func (g *Generator) getCurrentTime() int64 {
-	return 0 // This would return time.Now().Unix() in real implementation
+	// Returns the current time as a Unix timestamp (seconds since epoch).
+	return time.Now().Unix()
 }
 
 // AnalyzeMarketConditions provides overall market sentiment analysis
 func (g *Generator) AnalyzeMarketConditions(ctx context.Context, pairs []string) string {
+	// ************************************************************************************
+	// ** WARNING: THIS MARKET CONDITION ANALYSIS IS A PLACEHOLDER!                      **
+	// ** IT USES SIMULATED INDICATORS AND SIMPLISTIC LOGIC.                             **
+	// ** DO NOT USE FOR LIVE TRADING. Integrate real data and robust analysis.          **
+	// ************************************************************************************
+
 	// Analyze multiple pairs to determine overall market condition
 	bullishCount := 0
 	bearishCount := 0

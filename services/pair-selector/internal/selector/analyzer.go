@@ -96,7 +96,7 @@ func (a *Analyzer) analyzeSinglePair(ctx context.Context, pair models.TradingPai
 	}
 
 	// Volatility Analysis
-	volatilityMetrics := a.volatilityAnalyzer.AnalyzeVolatility(priceHistory)
+	volatilityMetrics := a.volatilityAnalyzer.AnalyzeVolatility(priceHistory, criteria)
 	analysis.Volatility = volatilityMetrics.Volatility24h
 	analysis.ATR14 = volatilityMetrics.ATR14
 
@@ -124,7 +124,7 @@ func (a *Analyzer) analyzeSinglePair(ctx context.Context, pair models.TradingPai
 	analysis.FinalScore = a.scorer.CalculateFinalScore(analysis, criteria)
 
 	// Determine risk level
-	analysis.RiskLevel = a.determineRiskLevel(analysis)
+	analysis.RiskLevel = a.determineRiskLevel(analysis, criteria.RiskThresholds)
 
 	// Update trading pair metrics in database
 	metrics := map[string]float64{
@@ -141,74 +141,82 @@ func (a *Analyzer) analyzeSinglePair(ctx context.Context, pair models.TradingPai
 	return &analysis, nil
 }
 
-func (a *Analyzer) determineRiskLevel(analysis models.PairAnalysis) string {
+func (a *Analyzer) determineRiskLevel(analysis models.PairAnalysis, thresholds models.RiskThresholdsConfig) string {
 	// Enhanced risk assessment with market regime detection
 	riskScore := 0.0
-	
-	// Volatility component (35% weight)
+	volCfg := thresholds.VolatilityRisk
+	corrCfg := thresholds.CorrelationRisk
+	voluCfg := thresholds.VolumeRisk
+	atrCfg := thresholds.ATRRisk
+	momCfg := thresholds.MomentumRisk
+	overallCfg := thresholds.OverallRisk
+
+	// Volatility component
 	volatilityRisk := 0.0
-	if analysis.Volatility > 0.12 {
-		volatilityRisk = 4.0
-	} else if analysis.Volatility > 0.08 {
-		volatilityRisk = 3.0
-	} else if analysis.Volatility > 0.05 {
-		volatilityRisk = 2.0
-	} else if analysis.Volatility > 0.03 {
-		volatilityRisk = 1.5
+	if analysis.Volatility > volCfg.Band1 {
+		volatilityRisk = volCfg.Score1
+	} else if analysis.Volatility > volCfg.Band2 {
+		volatilityRisk = volCfg.Score2
+	} else if analysis.Volatility > volCfg.Band3 {
+		volatilityRisk = volCfg.Score3
+	} else if analysis.Volatility > volCfg.Band4 {
+		volatilityRisk = volCfg.Score4
 	} else {
-		volatilityRisk = 1.0
+		volatilityRisk = volCfg.Score5
 	}
-	riskScore += volatilityRisk * 0.35
-	
-	// Correlation component (25% weight) - Low correlation increases risk
+	riskScore += volatilityRisk * volCfg.Weight
+
+	// Correlation component - Low correlation increases risk
 	correlationRisk := 0.0
 	absCorrelation := math.Abs(analysis.CorrelationBTC)
-	if absCorrelation < 0.2 {
-		correlationRisk = 4.0 // Very uncorrelated = higher risk
-	} else if absCorrelation < 0.4 {
-		correlationRisk = 3.0
-	} else if absCorrelation < 0.6 {
-		correlationRisk = 2.0
+	if absCorrelation < corrCfg.Band1 {
+		correlationRisk = corrCfg.Score1 // Very uncorrelated = higher risk
+	} else if absCorrelation < corrCfg.Band2 {
+		correlationRisk = corrCfg.Score2
+	} else if absCorrelation < corrCfg.Band3 {
+		correlationRisk = corrCfg.Score3
 	} else {
-		correlationRisk = 1.0 // High correlation = lower risk
+		correlationRisk = corrCfg.Score4 // High correlation = lower risk
 	}
-	riskScore += correlationRisk * 0.25
-	
-	// Volume stability component (20% weight)
+	riskScore += correlationRisk * corrCfg.Weight
+
+	// Volume stability component
 	volumeRisk := 0.0
-	if analysis.Volume24hUSDT < 1000000 {
-		volumeRisk = 4.0
-	} else if analysis.Volume24hUSDT < 3000000 {
-		volumeRisk = 3.0
-	} else if analysis.Volume24hUSDT < 10000000 {
-		volumeRisk = 2.0
+	if analysis.Volume24hUSDT < voluCfg.Band1 {
+		volumeRisk = voluCfg.Score1
+	} else if analysis.Volume24hUSDT < voluCfg.Band2 {
+		volumeRisk = voluCfg.Score2
+	} else if analysis.Volume24hUSDT < voluCfg.Band3 {
+		volumeRisk = voluCfg.Score3
 	} else {
-		volumeRisk = 1.0
+		volumeRisk = voluCfg.Score4
 	}
-	riskScore += volumeRisk * 0.20
-	
-	// ATR/Volatility ratio component (10% weight) - High ATR relative to volatility indicates instability
-	atrRisk := 0.0
+	riskScore += volumeRisk * voluCfg.Weight
+
+	// ATR/Volatility ratio component - High ATR relative to volatility indicates instability
+	atrRiskValue := 0.0
 	if analysis.Volatility > 0 {
 		atrRatio := analysis.ATR14 / analysis.Volatility
-		if atrRatio > 2.0 {
-			atrRisk = 3.0
-		} else if atrRatio > 1.5 {
-			atrRisk = 2.0
+		if atrRatio > atrCfg.RatioBand1 {
+			atrRiskValue = atrCfg.Score1
+		} else if atrRatio > atrCfg.RatioBand2 {
+			atrRiskValue = atrCfg.Score2
 		} else {
-			atrRisk = 1.0
+			atrRiskValue = atrCfg.Score3
 		}
 	} else {
-		atrRisk = 2.0
+		atrRiskValue = atrCfg.DefaultScoreNoVol
 	}
-	riskScore += atrRisk * 0.10
-	
-	// Price momentum component (10% weight) - Add momentum analysis
-	momentumRisk := a.calculateMomentumRisk(analysis)
-	riskScore += momentumRisk * 0.10
-	
-	// Normalize risk score (0-4 scale)
-	normalizedRisk := riskScore / 4.0
+	riskScore += atrRiskValue * atrCfg.Weight
+
+	// Price momentum component
+	momentumRisk := a.calculateMomentumRisk(analysis.PriceData, momCfg)
+	riskScore += momentumRisk * momCfg.Weight
+
+	// Normalize risk score (assuming max raw score is dynamic or weights sum to 1 and max individual score is capped e.g. at 4)
+	// The original code divided by 4.0. This implies the max possible weighted sum should be around 4.0.
+	// For now, we keep the division by 4.0. If weights or scores change, this might need adjustment or become configurable.
+	normalizedRisk := riskScore / 4.0 // TODO: Consider making normalization factor configurable or dynamically calculated.
 	
 	a.logger.WithFields(logrus.Fields{
 		"symbol":          analysis.Symbol,
@@ -219,51 +227,66 @@ func (a *Analyzer) determineRiskLevel(analysis models.PairAnalysis) string {
 		"momentum_risk":   momentumRisk,
 		"final_risk_score": normalizedRisk,
 	}).Debug("Risk assessment completed")
-	
-	if normalizedRisk >= 0.75 {
+
+	if normalizedRisk >= overallCfg.HighThreshold {
 		return "high"
-	} else if normalizedRisk >= 0.5 {
+	} else if normalizedRisk >= overallCfg.MediumThreshold {
 		return "medium"
 	}
 	return "low"
 }
 
-func (a *Analyzer) calculateMomentumRisk(analysis models.PairAnalysis) float64 {
+func (a *Analyzer) calculateMomentumRisk(priceData []models.PricePoint, momentumCfg models.MomentumRiskConfig) float64 {
 	// Simple momentum risk calculation based on price data
-	if len(analysis.PriceData) < 10 {
-		return 2.0 // Default medium risk for insufficient data
+	if len(priceData) < momentumCfg.MinDataPoints {
+		return momentumCfg.DefaultScoreForSafe // Default risk for insufficient data
 	}
-	
+
 	// Calculate short-term vs long-term price change
-	recent := analysis.PriceData[:5]   // Last 5 periods
-	older := analysis.PriceData[5:10]  // Previous 5 periods
-	
+	// Ensure indices are within bounds
+	recentEnd := momentumCfg.RecentPeriods
+	if recentEnd > len(priceData) {
+		recentEnd = len(priceData)
+	}
+	recent := priceData[:recentEnd]
+
+	olderStart := momentumCfg.OlderPeriodsStart
+	olderEnd := momentumCfg.OlderPeriodsEnd
+
+	if olderStart >= len(priceData) || olderStart >= olderEnd || olderEnd > len(priceData) {
+		// Not enough data for older period as configured, return default safe score
+		return momentumCfg.DefaultScoreForSafe
+	}
+	older := priceData[olderStart:olderEnd]
+
+	if len(recent) == 0 || len(older) == 0 { // Should not happen if MinDataPoints is reasonable
+		return momentumCfg.DefaultScoreForSafe
+	}
+
 	recentAvg := 0.0
-	olderAvg := 0.0
-	
 	for _, price := range recent {
 		recentAvg += price.Close
 	}
 	recentAvg /= float64(len(recent))
-	
+
+	olderAvg := 0.0
 	for _, price := range older {
 		olderAvg += price.Close
 	}
 	olderAvg /= float64(len(older))
-	
+
 	if olderAvg > 0 {
 		momentumChange := (recentAvg - olderAvg) / olderAvg
-		
-		// High absolute momentum indicates higher risk
 		absMomentum := math.Abs(momentumChange)
-		if absMomentum > 0.1 {
-			return 3.0 // High momentum = high risk
-		} else if absMomentum > 0.05 {
-			return 2.0 // Medium momentum = medium risk
+
+		if absMomentum > momentumCfg.ChangeBand1 {
+			return momentumCfg.Score1 // High momentum = high risk
+		} else if absMomentum > momentumCfg.ChangeBand2 {
+			return momentumCfg.Score2 // Medium momentum = medium risk
 		}
 	}
-	
-	return 1.0 // Low momentum = low risk
+
+	return momentumCfg.Score3 // Low momentum = low risk
 }
 
 func (a *Analyzer) SelectTopPairs(analyses []models.PairAnalysis, maxPairs int) []models.PairAnalysis {

@@ -264,3 +264,101 @@ func (r *Repository) GetLatestPrice(ctx context.Context, symbol string) (float64
 
 	return price, nil
 }
+
+// GetRecentRealizedPnL calculates the sum of realized PnL from positions closed since a given time.
+func (r *Repository) GetRecentRealizedPnL(ctx context.Context, since time.Time) (float64, error) {
+	query := `
+        SELECT COALESCE(SUM(realized_pnl), 0)
+        FROM positions
+        WHERE status LIKE 'closed%' AND closed_at >= $1
+    `
+	// Note: Using LIKE 'closed%' to catch "closed_stoploss", "closed_takeprofit", "closed" etc.
+	// Ensure that 'closed_at' is properly indexed for performance.
+
+	var totalRealizedPnL float64
+	err := r.db.QueryRowContext(ctx, query, since).Scan(&totalRealizedPnL)
+	if err != nil {
+		// sql.ErrNoRows should ideally be handled by COALESCE, returning 0.
+		// So, any error here is likely a real query problem.
+		return 0, fmt.Errorf("failed to get recent realized PnL: %w", err)
+	}
+
+	return totalRealizedPnL, nil
+}
+
+// GetPriceHistory retrieves recent price points (candles) for a symbol within a given window.
+// It assumes a table 'price_data' stores OHLCV data with timestamps.
+func (r *Repository) GetPriceHistory(ctx context.Context, symbol string, windowMinutes int) ([]models.PricePoint, error) {
+	// Calculate the start time for the window
+	since := time.Now().Add(-time.Duration(windowMinutes) * time.Minute)
+
+	query := `
+        SELECT timestamp, symbol, open, high, low, close, volume
+        FROM price_data
+        WHERE symbol = $1 AND timestamp >= $2
+        ORDER BY timestamp ASC
+    `
+	// Ensure 'symbol' and 'timestamp' are indexed.
+
+	rows, err := r.db.QueryContext(ctx, query, symbol, since)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query price history for symbol %s: %w", symbol, err)
+	}
+	defer rows.Close()
+
+	var priceHistory []models.PricePoint
+	for rows.Next() {
+		var p models.PricePoint
+		err := rows.Scan(&p.Timestamp, &p.Symbol, &p.Open, &p.High, &p.Low, &p.Close, &p.Volume)
+		if err != nil {
+			r.logger.WithError(err).WithField("symbol", symbol).Error("Failed to scan price point")
+			// Decide whether to return partial data or error out.
+			// For circuit breakers, potentially missing one candle might be okay, or it might not.
+			// Returning error for now if scan fails.
+			return nil, fmt.Errorf("failed to scan price point for %s: %w", symbol, err)
+		}
+		priceHistory = append(priceHistory, p)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating price history rows for %s: %w", symbol, err)
+	}
+
+	return priceHistory, nil
+}
+
+// GetAllOpenPositions retrieves all positions that are currently open or partially open.
+func (r *Repository) GetAllOpenPositions(ctx context.Context) ([]models.Position, error) {
+	query := `
+        SELECT id, pair_id, config_id, side, quantity, entry_price, current_price,
+               unrealized_pnl, realized_pnl, status, order_id, created_at, updated_at, closed_at
+        FROM positions
+        WHERE status IN ('open', 'partial')
+        ORDER BY created_at DESC
+    `
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query all open positions: %w", err)
+	}
+	defer rows.Close()
+
+	var positions []models.Position
+	for rows.Next() {
+		var pos models.Position
+		err := rows.Scan(
+			&pos.ID, &pos.PairID, &pos.ConfigID, &pos.Side, &pos.Quantity,
+			&pos.EntryPrice, &pos.CurrentPrice, &pos.UnrealizedPnL, &pos.RealizedPnL,
+			&pos.Status, &pos.OrderID, &pos.CreatedAt, &pos.UpdatedAt, &pos.ClosedAt,
+		)
+		if err != nil {
+			r.logger.WithError(err).Error("Failed to scan position for GetAllOpenPositions")
+			continue // Skip this position, try to get others
+		}
+		positions = append(positions, pos)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating all open positions rows: %w", err)
+	}
+	return positions, nil
+}

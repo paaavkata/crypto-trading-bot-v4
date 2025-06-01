@@ -85,3 +85,16 @@ type SelectedPair struct {
 	SelectedAt       time.Time `db:"selected_at"`
 	LastEvaluated    time.Time `db:"last_evaluated"`
 }
+
+// PricePoint represents a single data point in a time series of prices (e.g., a candle).
+// This model might be sourced from an external provider or another internal service/database
+// if the trading-engine itself doesn't store granular price history.
+type PricePoint struct {
+	Timestamp time.Time `db:"timestamp"`
+	Symbol    string    `db:"symbol"` // Symbol for which this price point is
+	Open      float64   `db:"open"`
+	High      float64   `db:"high"`
+	Low       float64   `db:"low"`
+	Close     float64   `db:"close"`
+	Volume    float64   `db:"volume"`
+}
